@@ -115,14 +115,36 @@ Don't know the name? Just say it: *"design a new agent that triages our support 
 
 ```
 mutagent-hackathon/
-├── README.md            ← you are here
-├── QUICKSTART.md        ← the full 7-stage guide
-├── quickstart.pdf       ← printable, branded deck
-└── .claude/             ← the Mutagent system (agents + skills) — installed by *helix init*
+├── README.md              ← you are here
+├── QUICKSTART.md          ← the full 7-stage guide
+├── quickstart.pdf         ← printable, branded deck
+├── SECURITY-READINESS.md  ← go-public hardening checklist (maintainers)
+└── submissions/<team>/    ← your challenge goes here (via PR)
 ```
+
+> The Mutagent system itself (agents + skills) is **installed locally via `helix init`**, not committed here.
+
+---
+
+## 🧩 Submitting your challenge
+
+Submissions are by **pull request** — the standard fork-and-PR flow:
+
+1. **Fork** this repo.
+2. Add your work under **`submissions/<your-team>/`** — your agent, its `agentspec.yaml`, the eval suite, and a short `README.md` (what it does, how to run it, your eval results).
+3. Open a **pull request to `main`**. CI + a maintainer review it, then a **maintainer merges** — direct pushes to `main` are disabled.
+
+> One self-contained PR per submission, scoped to your `submissions/<team>/` folder.
+
+## 🔒 Contribution & branch model
+
+- `main` is **protected** — no direct pushes, no force-push, no deletion. Every change lands via a reviewed PR.
+- **Anyone may open a PR; only maintainers may merge.** Public contributors work from forks.
+- Fork-PR CI runs with **no access to repo/org secrets**; first-time contributors' workflows require maintainer approval.
+- Full go-public hardening list: [`SECURITY-READINESS.md`](SECURITY-READINESS.md).
 
 ---
 
 ## License
 
-Proprietary — © MutagenT. All rights reserved.
+Proprietary — © MutagenT. All rights reserved. Submission terms are defined by the hackathon rules; by opening a PR you agree to them.
