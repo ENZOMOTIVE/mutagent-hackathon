@@ -118,7 +118,6 @@ mutagent-hackathon/
 ├── README.md              ← you are here
 ├── QUICKSTART.md          ← the full 7-stage guide
 ├── quickstart.pdf         ← printable, branded deck
-├── SECURITY-READINESS.md  ← go-public hardening checklist (maintainers)
 └── submissions/<team>/    ← your challenge goes here (via PR)
 ```
 
@@ -132,16 +131,12 @@ Submissions are by **pull request** — the standard fork-and-PR flow:
 
 1. **Fork** this repo.
 2. Add your work under **`submissions/<your-team>/`** — your agent, its `agentspec.yaml`, the eval suite, and a short `README.md` (what it does, how to run it, your eval results).
-3. Open a **pull request to `main`**. CI + a maintainer review it, then a **maintainer merges** — direct pushes to `main` are disabled.
+3. **Include your session transcripts** so judges can replay how you built & evaluated your agent — drop them in **`submissions/<your-team>/transcripts/`**:
+   - **Claude Code** — `~/.claude/projects/<your-project-folder>/<session-id>.jsonl`
+   - **Codex** — `~/.codex/sessions/<YYYY>/<MM>/<DD>/rollout-<…>.jsonl` (archived runs live under `~/.codex/archived_sessions/`)
+4. Open a **pull request to `main`** — a maintainer reviews and merges (direct pushes to `main` are disabled).
 
-> One self-contained PR per submission, scoped to your `submissions/<team>/` folder.
-
-## 🔒 Contribution & branch model
-
-- `main` is **protected** — no direct pushes, no force-push, no deletion. Every change lands via a reviewed PR.
-- **Anyone may open a PR; only maintainers may merge.** Public contributors work from forks.
-- Fork-PR CI runs with **no access to repo/org secrets**; first-time contributors' workflows require maintainer approval.
-- Full go-public hardening list: [`SECURITY-READINESS.md`](SECURITY-READINESS.md).
+> One self-contained PR per submission, scoped to your `submissions/<your-team>/` folder.
 
 ---
 
