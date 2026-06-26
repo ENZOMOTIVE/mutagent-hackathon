@@ -131,9 +131,9 @@ Submissions are by **pull request** — the standard fork-and-PR flow:
 
 1. **Fork** this repo.
 2. Add your work under **`submissions/<your-team>/`** — your agent, its `agentspec.yaml`, the eval suite, and a short `README.md` (what it does, how to run it, your eval results).
-3. **Include your session transcripts** so judges can replay how you built & evaluated your agent — drop them in **`submissions/<your-team>/transcripts/`**:
-   - **Claude Code** — `~/.claude/projects/<your-project-folder>/<session-id>.jsonl`
-   - **Codex** — `~/.codex/sessions/<YYYY>/<MM>/<DD>/rollout-<…>.jsonl` (archived runs live under `~/.codex/archived_sessions/`)
+3. **Include your session transcripts — the *main* session AND *every subagent* it spawned** — so judges can replay the full build & eval (agentic runs fan out to sub-agents; we want those too). Put them under **`submissions/<your-team>/transcripts/`**:
+   - **Claude Code** — all the run's `.jsonl` from `~/.claude/projects/<your-project-folder>/` (the main session **plus** any sub-agent sessions it produced)
+   - **Codex** — every `rollout-*.jsonl` under `~/.codex/sessions/<YYYY>/<MM>/<DD>/` for your run — the **main** session and **each sub-agent** are separate rollout files (archived runs under `~/.codex/archived_sessions/`)
 4. Open a **pull request to `main`** — a maintainer reviews and merges (direct pushes to `main` are disabled).
 
 > One self-contained PR per submission, scoped to your `submissions/<your-team>/` folder.
