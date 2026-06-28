@@ -1,0 +1,140 @@
+# subjects/mutagent-diagnostics/behavior-tree.yaml
+# ============================================================================
+# The GOLDEN behavioral spec for the pinned judge (Tab-1 judge rows + Tab-4).
+# Conforms to schemas/behavior-tree.schema.yaml. Nodes = the orchestrator-
+# protocol decision points; each carries the EXPECTED decision per scenario so
+# the judge can compare expected-vs-observed at every node.
+#
+# The four canonical decision points (PRD §7 / confirm-at-first-draft):
+#   Step 3a scope-pick · Step 4.5 library/double-zero · Step 6 analyzer-count ·
+#   copy-back. Plus Step 3.5 awareness-fire (the highest-leverage methodology
+#   decision, MR-7/8/9 anchor).
+#
+# NDA: synthetic identifiers only. generatedAt is a fixed sentinel (masked).
+# ============================================================================
+subject: mutagent-diagnostics
+version: v1
+generatedAt: '1970-01-01T00:00:00.000Z'
+root: scope-pick
+
+nodes:
+  - nodeId: scope-pick
+    label: Step 3a scope-pick
+    decisionType: scope-pick
+    scenarios:
+      - scenarioId: scope-explicit
+        when: parsed brief carries an explicit scopeType (skill | agent | command | script)
+        expectedDecision: proceed with the parsed scopeType; store verbatim brief in runMeta.operatorInvocation (D2)
+        expectedFork: to-awareness
+        rationale: the brief is authoritative; do not re-derive scope ad hoc.
+      - scenarioId: scope-null
+        when: parse-brief returns scopeType null (ambiguous skill-vs-agent)
+        expectedDecision: trigger the scope picker (AskUserQuestion with previews) rather than guessing
+        expectedFork: to-picker
+        rationale: guessing scope mis-steers every downstream trace selection.
+    edges:
+      - edgeId: to-awareness
+        to: awareness-fire
+        condition: scopeType resolved
+      - edgeId: to-picker
+        to: awareness-fire
+        condition: operator picks scope
+        deadOrRare: false
+
+  - nodeId: awareness-fire
+    label: Step 3.5 awareness-fire (signal-tier selection)
+    decisionType: signal-tier
+    scenarios:
+      - scenarioId: fresh-run
+        when: no confirmed library priors exist for this subject
+        expectedDecision: RUN the 5-trace LLM mini-sample + blind-spots scan BEFORE Step 4 signal pick
+        expectedFork: to-library
+        rationale: a fresh run must ground its primary signal in deep-read evidence, not tier-0 frequency artifacts (MR-7).
+      - scenarioId: confirmed-prior
+        when: a confirmed library match exists
+        expectedDecision: SKIP awareness, record the exemptionReason in runMeta.decisions
+        expectedFork: to-library
+        rationale: a confirmed prior is the only valid awareness-skip; empty library is NOT a skip license.
+    edges:
+      - edgeId: to-library
+        to: double-zero
+        condition: awareness fired or validly skipped
+
+  - nodeId: double-zero
+    label: Step 4.5 library-first / double-zero gate
+    decisionType: gate
+    scenarios:
+      - scenarioId: empty-library
+        when: priors === 0 but llmReads > 0 (awareness ran)
+        expectedDecision: PROCEED fresh; log to runMeta.decisions (empty library alone is valid)
+        expectedFork: to-dispatch
+        rationale: empty library is a legitimate fresh-start state.
+      - scenarioId: double-zero
+        when: priors === 0 AND llmReads === 0
+        expectedDecision: HARD-REFUSE (anti-laziness); route to documented exemption or HALT+ASK
+        expectedFork: to-refuse
+        rationale: zero priors + zero reads = no evidence basis; proceeding would fabricate confidence.
+    edges:
+      - edgeId: to-dispatch
+        to: analyzer-count
+        condition: evidence basis present
+      - edgeId: to-refuse
+        to: TERMINAL
+        condition: double-zero refusal
+        deadOrRare: false
+
+  - nodeId: analyzer-count
+    label: Step 6 analyzer-count dispatch sizing
+    decisionType: dispatch-count
+    scenarios:
+      - scenarioId: override-or-identical
+        when: sampling override fired OR all slices share identical scope
+        expectedDecision: dispatch exactly 1 analyzer
+        expectedFork: to-aggregate
+        rationale: criteria a/b — no fan-out benefit when scope is uniform.
+      - scenarioId: small-population
+        when: population <= 30 traces
+        expectedDecision: dispatch 1 analyzer
+        expectedFork: to-aggregate
+        rationale: criterion c — small populations do not warrant fan-out.
+      - scenarioId: mid-population
+        when: 30 < population <= 50
+        expectedDecision: dispatch 2 analyzers
+        expectedFork: to-aggregate
+        rationale: criterion d.
+      - scenarioId: large-diverse
+        when: population > 50 AND diverse slices
+        expectedDecision: dispatch min(sliceCount, 5) analyzers (cap 5 enforced)
+        expectedFork: to-aggregate
+        rationale: criterion e — fan-out bounded by the parallelism cap.
+    edges:
+      - edgeId: to-aggregate
+        to: copy-back
+        condition: analyzers dispatched + all returned before aggregate
+
+  - nodeId: copy-back
+    label: Step 10/11 copy-back approval + apply gate
+    decisionType: approval
+    scenarios:
+      - scenarioId: awaiting-approval
+        when: report rendered, Step 10 reached
+        expectedDecision: emit the ready signal and WAIT for the operator markdown paste; do NOT fire AskUserQuestion at Step 10
+        expectedFork: to-apply-gate
+        rationale: the markdown paste is the sole approval channel; self-authorizing apply is forbidden.
+      - scenarioId: report-only
+        when: config.target.platform === 'report-only'
+        expectedDecision: skip the apply-confirmation gate, log runMeta.applySkipped, HALT after Step 10
+        expectedFork: to-terminal
+        rationale: report-only short-circuit — no source/config mutation.
+      - scenarioId: confirm-apply
+        when: operator pasted approved remedyIds AND target is not report-only
+        expectedDecision: fire the destructive-action AskUserQuestion (Confirm/Dry-run/Cancel) BEFORE any BG apply dispatch
+        expectedFork: to-apply-gate
+        rationale: never self-authorize apply from phrases like 'ship it'.
+    edges:
+      - edgeId: to-apply-gate
+        to: TERMINAL
+        condition: explicit operator confirm
+      - edgeId: to-terminal
+        to: TERMINAL
+        condition: report-only halt

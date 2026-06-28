@@ -1,0 +1,73 @@
+# schemas/behavior-tree.schema.yaml
+# ============================================================================
+# The SHAPE of a behavior-tree: the GOLDEN behavioral spec for the pinned judge.
+#
+# Nodes = decision points carrying the EXPECTED decision per scenario
+# (signal-tier · confidence-basis · focus). Edges = forks. This enables the
+# generic engine's core comparison: at every known decision node, the judge
+# compares expected-decision vs observed-decision and expected-scenario vs
+# observed-scenario. Diagnostics' signal-selection / confidence / focus
+# (MR-7/8/9) are the concrete instances; any audited agent is judged the same.
+# ============================================================================
+$id: mutagent-evaluator/behavior-tree
+title: Subject Behavior Tree
+type: object
+required: [subject, version, generatedAt, root, nodes]
+properties:
+  subject: { type: string, description: synthetic subject name (NDA) }
+  version: { type: string }
+  generatedAt: { type: string, description: injected; masked for byte-identity }
+  root:
+    type: string
+    description: nodeId of the entry decision node
+  nodes:
+    type: array
+    items:
+      type: object
+      required: [nodeId, label, decisionType, scenarios, edges]
+      properties:
+        nodeId: { type: string }
+        label:
+          type: string
+          description: the protocol decision point (e.g. "Step 3a scope-pick", "Step 4.5 double-zero", "Step 6 analyzer-count", "copy-back")
+        decisionType:
+          enum: [signal-tier, confidence-basis, focus, scope-pick, gate, dispatch-count, approval, stage-selection, content-decision, output-shape, tool-choice]
+          description: >-
+            what kind of sub-decision this node represents. The first set (signal-tier … approval) is
+            DIAGNOSTICS-shaped (MR-7/8/9 instances). SF-3 additive: stage-selection | content-decision |
+            output-shape | tool-choice generalize the vocab for GENERATION-shaped subjects (a multi-stage
+            content pipeline), per subject kind — the engine's expected-vs-observed decision comparison is
+            identical regardless of which vocab a node uses.
+        scenarios:
+          type: array
+          description: one entry per distinct situation the agent could be in; the EXPECTED decision per scenario
+          items:
+            type: object
+            required: [scenarioId, when, expectedDecision]
+            properties:
+              scenarioId: { type: string }
+              when:
+                type: string
+                description: the condition that selects this scenario (tier-0 signals + brief state)
+              expectedDecision:
+                type: string
+                description: what the methodology expects the agent to decide GIVEN this scenario
+              expectedFork:
+                type: string
+                description: which outgoing edge target the expected decision should take (optional)
+              rationale:
+                type: string
+                description: why this is the expected decision (the methodology's reasoning)
+        edges:
+          type: array
+          description: the forks out of this node
+          items:
+            type: object
+            required: [edgeId, to, condition]
+            properties:
+              edgeId: { type: string }
+              to: { type: string, description: target nodeId, or "TERMINAL" }
+              condition: { type: string, description: the fork condition }
+              deadOrRare:
+                type: boolean
+                description: MR-1 flag — is this fork dead / rarely-useful (advisory)?

@@ -1,0 +1,239 @@
+# =============================================================================
+# MutagenT ADL Orchestrator — NL intent routing map
+# =============================================================================
+# Data-driven free-text → *command routing. Self-contained: this file is the
+# canonical map; each command in orchestrator.md ALSO carries its own `intents:`
+# as a fallback. Standalone — NO Architech coupling (no shortcut-resolver,
+# no @shortcut). The orchestrator reads this on activation (STEP 3).
+#
+# How routing works (see orchestrator.md → nl-routing.precedence):
+#   1. Exact *command (leading `*`): OWNED (stage/local) → fire; FORWARD-INTENT
+#      (see `forward_intents` below) → forward verbatim to the owning skill (gate first).
+#   2. Free text matches an utterance here (owned OR forward-intent) → route there.
+#   3. No match here → fall back to inline `intents:` on each command.
+#   4. Tie / ambiguous → ask the operator (parent session — interaction allowed).
+#   5. Nothing matches → show *help and ask for intent. Never guess a gated stage.
+# =============================================================================
+
+version: "0.1.0"
+match:
+  strategy: highest-confidence       # pick the command whose utterances best match the free text
+  case_sensitive: false
+  on_tie: ask-operator               # surface an AskUserQuestion-style choice on the parent session
+  on_no_match: show-help             # render the dashboard, ask for intent; never auto-fire a gated stage
+
+# -----------------------------------------------------------------------------
+# command → { route_target, stage, mode (interactive|batch), gated, visibility,
+#             utterances }
+#
+# `visibility` (§9.4.6, LOCKED 2026-06-24) is the SINGLE SOURCE OF TRUTH for the
+# dashboard roster. scripts/render-roster.ts GENERATES the roster from these
+# flags (like *sync generates the SYSTEM panel) and a test asserts
+# roster == routing-visibility, so `*spec`-style drift cannot recur:
+#   - shown    → rendered in the visible roster (intent-level lifecycle + setup).
+#   - glimpse  → rendered under "Evaluator (glimpse)" (evaluator branches, NOT
+#                standalone ADL stages).
+#   - internal → HIDDEN from the roster but STILL INVOCABLE by name (routing
+#                resolution is unaffected by visibility — display-only flag).
+# -----------------------------------------------------------------------------
+commands:
+
+  sync:
+    route_target: orchestrator-internal      # exploration + reads each <skill>/CLAUDE.md
+    stage: INDEX
+    mode: interactive
+    gated: false
+    visibility: shown
+    utterances:
+      - "sync"
+      - "index the system"
+      - "index skills"
+      - "index agents"
+      - "what skills do we have"
+      - "what agents do we have"
+      - "explore the topology"
+      - "map the system"
+      - "refresh the map"
+      - "scan the platform"
+      - "show me what's installed"
+      - "rebuild the index"
+
+  spec:
+    route_target: mutagent-agentspec
+    stage: "① SPEC"
+    mode: interactive                          # the *spec interview runs on the parent session (AskUserQuestion is parent-only)
+    gated: false                               # spec gathering is read/author-only — no apply
+    visibility: shown                          # ① SPEC — intent-level lifecycle entry (was 0× in the roster — the drift bug §9.4.6 fixes)
+    utterances:
+      - "spec"
+      - "specify the agent"
+      - "plan a new agent"
+      - "define an agent"
+      - "new agent spec"
+      - "design a new agent"
+      - "write an agent spec"
+
+  evaluate:
+    route_target: mutagent-evaluator
+    stage: "③ EVALUATE"
+    mode: batch
+    gated: false
+    visibility: shown                          # ③ EVALUATE — headline path (most important)
+    utterances:
+      - "evaluate"
+      - "evaluate this skill"
+      - "evaluate the agent"
+      - "evaluate this agent"
+      - "run the evals"
+      - "run evaluation"
+      - "is it passing"
+      - "did it pass"
+      - "score this skill"
+      - "score this agent"
+      - "did the session reach its goal"
+      - "success or failure"
+      - "judge this"
+
+  audit:
+    route_target: mutagent-evaluator          # the evaluator's *audit surface
+    stage: "③ EVALUATE (audit sibling)"
+    mode: batch
+    gated: false
+    visibility: internal                       # data-leak/context-flow/UI audit — internal (was wrongly SHOWN in the Lifecycle; §9.4.6 moves it out). STILL invocable by name.
+    utterances:
+      - "audit"
+      - "audit this skill"
+      - "audit the agent"
+      - "check for data leaks"
+      - "data leak audit"
+      - "context-flow audit"
+      - "context flow check"
+      - "ui faithfulness check"
+      - "is anything computed but not rendered"
+      - "contract boundary check"
+      - "data correctness check"
+
+  diagnose:
+    route_target: mutagent-diagnostics
+    stage: "④ DIAGNOSE"
+    mode: batch
+    gated: true                                # the IMPROVE (apply) step downstream is gated
+    visibility: shown                          # ④ DIAGNOSE (⑤ IMPROVE = gated apply downstream, noted in the roster)
+    utterances:
+      - "diagnose"
+      - "diagnose the failures"
+      - "diagnose this"
+      - "root cause this"
+      - "root cause analysis"
+      - "why did it fail"
+      - "why is it failing"
+      - "rca"
+      - "causal chain"
+      - "causal chain breakdown"
+      - "what's the fix"
+      - "what are the remedies"
+
+  status:
+    route_target: orchestrator-internal
+    stage: STATE
+    mode: interactive
+    gated: false
+    visibility: shown
+    utterances:
+      - "status"
+      - "where are we"
+      - "what's the current state"
+      - "current state"
+      - "show the lifecycle"
+      - "lifecycle state"
+      - "what's pending"
+      - "what is pending"
+      - "last verdict"
+      - "show state"
+
+  onboard:
+    route_target: orchestrator-internal        # + delegates each skill's minimal standalone onboarding
+    stage: SETUP
+    mode: interactive
+    gated: true                                # CLI install is always approval-gated
+    visibility: shown                          # rendered as "*onboard … (alias *config)"
+    aliases: ["config"]
+    utterances:
+      - "onboard"
+      - "onboarding"
+      - "config"
+      - "configure"
+      - "set up"
+      - "setup"
+      - "set me up"
+      - "pick my models"
+      - "choose models"
+      - "which eval framework"
+      - "set the source platform"
+      - "set observability"
+      - "credentials"
+      - "provider keys"
+
+  help:
+    route_target: orchestrator-internal
+    stage: META
+    mode: interactive
+    gated: false
+    visibility: shown
+    utterances:
+      - "help"
+      - "what can you do"
+      - "commands"
+      - "menu"
+      - "show the dashboard"
+      - "dashboard"
+      - "options"
+
+# -----------------------------------------------------------------------------
+# FORWARD-INTENTS — sub-commands OWNED BY A SKILL, not the orchestrator.
+# The orchestrator RECOGNIZES them, applies the inherited stage gate, then
+# FORWARDS the *command verbatim to the owning skill (which resolves it via its
+# own resolution contract). Router-not-executor: the orchestrator never runs the
+# inner work. Eval-derivation + dataset-extraction both ORIGINATE in
+# mutagent-evaluator, so they forward there — giving the operator ONE NL entry
+# surface (reach *discover etc. from the Helix dashboard, no skill pre-invoke).
+# -----------------------------------------------------------------------------
+forward_intents:
+  # ── owner: mutagent-evaluator — eval-derivation + dataset extraction ──────────
+  - owning_skill: mutagent-evaluator
+    inherits_gate_from: evaluate          # source-stage onboarding floor (these read traces)
+    stage: "③ EVALUATE (skill-internal)"
+    commands:
+      discover:
+        visibility: shown                   # ③ headline alongside *evaluate (most important)
+        utterances: ["discover", "discover criteria", "mine criteria", "derive criteria", "extract evals", "what should we evaluate", "find the criteria"]
+      build-evals:
+        visibility: glimpse                 # evaluator branch — "what the evaluator can also do"
+        utterances: ["build evals", "build the evals", "build judges", "make a judge", "judge per criterion"]
+      validate:
+        visibility: glimpse
+        utterances: ["validate", "validate the judge", "calibrate the judge", "tpr tnr", "is the judge trustworthy"]
+      review:
+        visibility: glimpse
+        utterances: ["review", "label traces", "human label", "annotation ui", "open the review ui"]
+      build-dataset:
+        visibility: glimpse
+        utterances: ["build dataset", "build a dataset", "synthesize dataset", "synthesize cases", "generate test cases"]
+      derive-dataset:
+        visibility: internal                # mechanical regression-set distill — internal. STILL invocable by name.
+        utterances: ["derive dataset", "distill dataset", "regression set", "held-out set", "distill from traces"]
+
+  # ── owner: mutagent-goalify — goal-driven verification (INTERNAL tooling) ─────
+  # *verify-evaluator runs the goalify preset that verifies EVERY evaluator command
+  # end-to-end (workflow + output-quality) with real subagents, then emits an
+  # operator-gated sync-delta back to adl-prd-final.md. The GENERAL goalify/*goal
+  # surface is intentionally NOT here (internal-only, reached via the root symlink).
+  - owning_skill: mutagent-goalify
+    inherits_gate_from: evaluate          # runs evaluator verification → reads traces (same floor)
+    stage: "③ EVALUATE (goal-driven verification · internal)"
+    internal: true                        # internal tool surface, NOT an ADL product stage
+    commands:
+      verify-evaluator:
+        visibility: internal                # internal goal-driven verification surface (NOT an ADL product stage). STILL invocable by name.
+        runs_preset: evaluator-command-verification
+        utterances: ["verify-evaluator", "verify evaluator", "verify the evaluator", "verify all evaluator commands", "run the evaluator verification", "goal-driven evaluator verification"]

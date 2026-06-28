@@ -1,0 +1,40 @@
+# schemas/methodology-review.schema.yaml
+# ============================================================================
+# The SHAPE of the MR (methodology-review) rubric — §1.5 family.
+#
+# This is the SECOND requirement family: FITNESS, not conformance. It does not
+# pass/fail a component; it interrogates the methodology's own decision-tree,
+# workflow structure, and data-flow, and emits ranked recommendations to
+# rearrange / improve the process. MR-1..9 (Tab-4 lens reads these).
+# ============================================================================
+$id: mutagent-evaluator/methodology-review
+title: Subject Methodology-Review Rubric
+type: object
+required: [subject, version, generatedAt, items]
+properties:
+  subject: { type: string, description: synthetic subject name (NDA) }
+  version: { type: string }
+  generatedAt: { type: string, description: injected; masked for byte-identity }
+  items:
+    type: array
+    description: the MR-1..9 rubric items (advisory, NOT pass/fail)
+    items:
+      type: object
+      required: [id, title, reads, how, family]
+      properties:
+        id:
+          type: string
+          description: MR-1 .. MR-9
+        title: { type: string }
+        reads:
+          type: string
+          description: the inputs this MR item reasons over (e.g. "behavior-tree + run outcomes")
+        how:
+          type: string
+          description: how the judge reasons over the inputs to emit a finding
+        family:
+          enum: [decision-tree-fitness, data-flow-efficiency, methodology-fitness, sequence-soundness, process-self-feedback, conformance-vs-fitness, signal-selection, confidence-derivation, focus-determination]
+          description: which fitness concern this item interrogates
+        advisory:
+          type: boolean
+          description: always true — MR items NEVER gate a run (decision #5 keeps GATE and TREND separate)

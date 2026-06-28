@@ -1,0 +1,69 @@
+# schemas/flow-graph.schema.yaml — EV-032 information-flow graph (human-readable mirror)
+#
+# The deterministic structure `scripts/flow-graph.ts` produces from one trace.
+# Kept in lockstep with the TypeBox contract in `scripts/contracts/flow-graph.ts`
+# (that file is the SINGLE SOURCE OF TRUTH; this YAML documents the shape for
+# subject authors + reviewers). SUBJECT-AGNOSTIC: nodes are named by the trace's
+# OWN observation names; no subject vocabulary is baked in here.
+title: FlowGraph
+type: object
+additionalProperties: false
+required: [traceId, nodes, edges, unthreadedOutputs]
+properties:
+  traceId:
+    type: string
+    description: The id of the trace this graph was built from.
+  nodes:
+    type: array
+    description: One node per trace observation, viewed as a producer/consumer.
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, index, type, name, produces, consumes, isHandoff]
+      properties:
+        id: { type: string, description: "Stable node id by position (n0, n1, …)." }
+        index: { type: integer, minimum: 0 }
+        type: { type: string, description: "The observation type (TOOL / GENERATION / EVENT / AGENT / …)." }
+        name: { type: string, description: "The observation name (tool/step name) — may be empty." }
+        produces:
+          type: array
+          items: { type: string }
+          description: "Top-level output slot keys (primitive payload → the _value sentinel)."
+        consumes:
+          type: array
+          items: { type: string }
+          description: "Top-level input slot keys (primitive payload → the _text sentinel)."
+        isHandoff:
+          type: boolean
+          description: "True iff name ∈ the SUPPLIED dispatchToolNames (a sub-agent dispatch, EV-029)."
+  edges:
+    type: array
+    description: >-
+      Data-handoff edges. An edge means a producer slot's value string reached a
+      LATER consumer's serialized input (deterministic content-overlap, EV-028).
+    items:
+      type: object
+      additionalProperties: false
+      required: [from, to, slot, kind]
+      properties:
+        from: { type: string, description: "Producer node id." }
+        to: { type: string, description: "Consumer node id." }
+        slot: { type: string, description: "The producer slot whose value threaded." }
+        kind:
+          type: string
+          enum: [threaded, handoff]
+          description: "threaded = plain tool-result (EV-028); handoff = sub-agent dispatch context (EV-029)."
+  unthreadedOutputs:
+    type: array
+    description: >-
+      Producer slots whose value NEVER reached a downstream consumer — the EV-028
+      candidate leaks the context-flow judge then adjudicates (severity is NOT
+      decided here).
+    items:
+      type: object
+      additionalProperties: false
+      required: [node, name, slot]
+      properties:
+        node: { type: string }
+        name: { type: string }
+        slot: { type: string }

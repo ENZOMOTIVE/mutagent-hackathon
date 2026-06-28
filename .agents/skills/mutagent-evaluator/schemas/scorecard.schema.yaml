@@ -1,0 +1,85 @@
+# schemas/scorecard.schema.yaml
+# ============================================================================
+# The TWO-TRACK scorecard shape (decision #5). GATE and TREND are SEPARATE and
+# NEVER merged.
+#
+#   Track-1 GATE  — binary, severity-gated. Component PASS iff 0 CRIT/HIGH fail.
+#                   Run PASS iff all components pass. Advisory.
+#   Track-2 TREND — the manual's 15-dim variance score, separate.
+#
+# scorecard.json (the assembled artifact) conforms to this shape. The executable
+# validator lives in scripts/contracts/scorecard.ts (TypeBox).
+# ============================================================================
+$id: mutagent-evaluator/scorecard
+title: Two-Track Scorecard
+type: object
+required: [subject, runId, generatedAt, gate, trend]
+properties:
+  subject: { type: string }
+  runId: { type: string, description: masked for byte-identity }
+  generatedAt: { type: string, description: injected; masked for byte-identity }
+
+  gate:
+    type: object
+    description: Track-1 — binary, severity-gated rollup
+    required: [runPass, components, totals]
+    properties:
+      runPass:
+        type: boolean
+        description: true iff every component passes (0 CRIT/HIGH fail)
+      components:
+        type: array
+        items:
+          type: object
+          required: [componentId, pass, criteria]
+          properties:
+            componentId: { type: string }
+            pass: { type: boolean, description: true iff 0 CRIT/HIGH criteria failed }
+            criteria:
+              type: array
+              items:
+                type: object
+                required: [dimension, severity, checkMethod, track, result]
+                properties:
+                  dimension: { type: string }
+                  severity: { enum: [CRIT, HIGH, MED, LOW] }
+                  checkMethod: { type: string }
+                  track: { enum: [deterministic, judge] }
+                  result: { enum: [pass, fail, skip] }
+                  detail: { type: string }
+      totals:
+        type: object
+        required: [pass, fail, skip, critFail, highFail]
+        properties:
+          pass: { type: integer }
+          fail: { type: integer }
+          skip: { type: integer }
+          critFail: { type: integer }
+          highFail: { type: integer }
+
+  trend:
+    type: object
+    description: Track-2 — the 15-dim variance score (separate, never merged into GATE)
+    required: [dimensions, varianceScore, runPair]
+    properties:
+      runPair:
+        type: object
+        description: the two run bundles compared (masked); absent on a single-run audit
+        properties:
+          a: { type: string }
+          b: { type: string }
+      dimensions:
+        type: array
+        description: the fixed 15 determinism dimensions
+        items:
+          type: object
+          required: [name, measure, target, divergence]
+          properties:
+            name: { type: string }
+            measure: { type: string }
+            target: { type: string, description: per-Phase target }
+            divergence:
+              enum: [identical, within-target, diverged, not-evaluated]
+      varianceScore:
+        type: number
+        description: count of dimensions that diverged beyond target (lower is better; 0 = byte-identical)

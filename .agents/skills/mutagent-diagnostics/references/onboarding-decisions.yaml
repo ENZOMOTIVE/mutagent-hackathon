@@ -1,0 +1,187 @@
+# references/onboarding-decisions.yaml
+# R-SELF-07-a: Structured option lists for each onboarding decision phase.
+# Used by the parent session (inline orchestrator) when presenting choices to the operator.
+#
+# Each decision has:
+#   id        — machine ID for the choice
+#   label     — human-readable label shown to operator
+#   value     — written to config.yaml when chosen
+#   platform_doc — (optional) references/source-platforms/{value}.md path to load
+#   note      — (optional) rendered below the option if selected
+#
+# R-SELF-07-b: Every option list MUST end with the Custom escape hatch entry
+#   { label: 'Custom — describe what you have', value: '__custom__' }
+# so the operator is never blocked on an unsupported platform.
+
+version: "1.0"
+
+decisions:
+
+  # Phase 1 — Source platform
+  source_platform:
+    question: "Where do your agent traces live?"
+    key: source_platform
+    options:
+      - id: langfuse
+        label: "Langfuse (cloud or self-hosted)"
+        value: langfuse
+        platform_doc: "references/source-platforms/langfuse.md"
+      - id: otel
+        label: "OpenTelemetry-compliant endpoint"
+        value: otel
+        platform_doc: "references/source-platforms/otel.md"
+      - id: local-jsonl
+        label: "Local trace file (.jsonl / .ndjson)"
+        value: local-jsonl
+        platform_doc: "references/source-platforms/local-jsonl.md"
+      - id: claude-code
+        label: "Claude Code local transcripts (~/.claude/projects/…/*.jsonl)"
+        value: claude-code
+        platform_doc: "references/source-platforms/claude-code.md"
+      - id: codex
+        label: "Codex local transcripts (~/.codex/sessions/*.jsonl)"
+        value: codex
+        platform_doc: "references/source-platforms/codex.md"
+      - id: __custom__
+        label: "Custom — describe what you have"
+        value: __custom__
+        note: "Describe your trace format. Orchestrator will attempt a general-purpose fallback and guide credential setup."
+
+  # Phase 4 — Target platform (where agent definitions live)
+  target_platform:
+    question: "Where do your agent definitions live?"
+    key: target_platform
+    options:
+      - id: local-claude
+        label: "Claude Code agents (.claude/agents/*.md)"
+        value: local-claude
+        platform_doc: "references/target-platforms/local-claude.md"
+      - id: local-codex
+        label: "Codex agents (.codex/agents/*.md)"
+        value: local-codex
+        platform_doc: "references/target-platforms/local-codex.md"
+      - id: local-cursor
+        label: "Cursor agents (cursor-equivalent dir)"
+        value: local-cursor
+        platform_doc: "references/target-platforms/local-cursor.md"
+      - id: local-opencode
+        label: "OpenCode agents (opencode-equivalent dir)"
+        value: local-opencode
+        platform_doc: "references/target-platforms/local-opencode.md"
+      - id: mastra
+        label: "Mastra code construct (source code: new Agent({...}))"
+        value: mastra
+        platform_doc: "references/target-platforms/mastra.md"
+      - id: anthropic-cloud
+        label: "Anthropic Cloud Agent SDK (source code)"
+        value: anthropic-cloud
+        platform_doc: "references/target-platforms/anthropic-cloud.md"
+      - id: rest-api
+        label: "Cloud REST API (HTTP GET/PUT)"
+        value: rest-api
+        platform_doc: "references/target-platforms/rest-api.md"
+      - id: __custom__
+        label: "Custom — describe where your agents live"
+        value: __custom__
+        note: "Describe your agent storage format. Orchestrator will attempt the general-purpose code-construct apply path."
+
+  # Phase 5b agent install scope
+  agent_install_scope:
+    question: "Install diagnostics-* agents: project-scope or user-global?"
+    key: agent_install_scope
+    options:
+      - id: project
+        label: "Project-scope (recommended — visible in repo's .claude/agents/)"
+        value: project
+        note: "Writes to $PROJECT_ROOT/.claude/agents/ — committed, visible to all contributors."
+      - id: user
+        label: "User-global (~/.claude/agents/ — available in all projects)"
+        value: user
+        note: "Writes to ~/.claude/agents/ — not in repo, convenient for personal setups."
+      - id: __custom__
+        label: "Custom path — specify manually"
+        value: __custom__
+        note: "You will be prompted for the exact destination directory."
+
+  # Phase 5c dry-spawn verification offer
+  agent_dry_spawn:
+    question: "Agents verified. Want to dry-spawn each with a no-op probe?"
+    key: agent_dry_spawn
+    options:
+      - id: yes
+        label: "Yes — probe all 3 (safe: no trace data read, no writes)"
+        value: yes
+        note: "Dispatches each agent with prompt: 'echo: probe' and confirms they activate."
+      - id: no
+        label: "No — skip, I trust the verification"
+        value: no
+      - id: __custom__
+        label: "Custom — probe only specific agents"
+        value: __custom__
+        note: "Specify which agents to probe by name."
+
+  # Phase 6 — Trigger rules
+  # ⏸ DISABLED for v0.1: do NOT ask this question. v0.1 is always on-demand.
+  #    Auto-write `schedule.mode: on-demand` without prompting. Re-enable (flip
+  #    disabled: false) when scheduling lands post-v0.1. Config field is KEPT.
+  trigger_mode:
+    disabled: true
+    default: on-demand
+    question: "When should diagnostics run?"
+    key: schedule.mode
+    options:
+      - id: on-demand
+        label: "On-demand (I invoke it manually) — recommended for v0.1"
+        value: on-demand
+      - id: scheduled
+        label: "I'll set up scheduling later (structure prepared)"
+        value: on-demand
+        note: "Config will contain schedule.mode: on-demand. Edit references/workflows/schedule-prep.md to wire scheduling post-v0.1."
+      - id: __custom__
+        label: "Custom — describe your trigger"
+        value: __custom__
+        note: "Orchestrator will translate your description into a trigger rule. May require schedule.mode: scheduled."
+
+  # Phase 6 — Trigger condition
+  trigger_condition:
+    question: "Add a trigger condition? (optional)"
+    key: trigger_condition
+    options:
+      - id: score-threshold
+        label: "Diagnose when score < threshold (threshold auto-discovered)"
+        value: score-threshold
+      - id: error-rate
+        label: "Diagnose when error rate > 20%"
+        value: error-rate
+      - id: none
+        label: "No trigger condition — manual invocation only"
+        value: none
+      - id: __custom__
+        label: "Custom filter — describe in natural language"
+        value: __custom__
+        note: "Orchestrator will translate your description into a TraceFilter."
+
+  # Phase 8 — First-run pick
+  first_run:
+    question: "Setup complete! What would you like to diagnose first?"
+    key: first_run
+    options:
+      - id: last-24h
+        label: "Diagnose traces from the last 24 hours"
+        value: last-24h
+      - id: most-recent-failing
+        label: "Diagnose your most recently failing agent"
+        value: most-recent-failing
+      - id: negative-feedback-week
+        label: "Diagnose all sessions with negative feedback this week"
+        value: negative-feedback-week
+      - id: high-latency
+        label: "Diagnose all high-latency sessions"
+        value: high-latency
+      - id: manual
+        label: "I'll invoke manually later"
+        value: manual
+      - id: __custom__
+        label: "Custom — describe what you want to diagnose"
+        value: __custom__
+        note: "Orchestrator will translate your description into a TraceFilter."

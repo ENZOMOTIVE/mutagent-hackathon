@@ -1,0 +1,74 @@
+# schemas/eval-matrix.schema.yaml
+# ============================================================================
+# The SHAPE a subject eval-matrix must conform to.
+# A subject profile (subjects/<name>/eval-matrix.yaml) is a master checklist:
+# every component (agent / skill-orchestrator-step / star-command / script)
+# graded on a 3-dimension MECE coverage, with a per-criterion checkMethod that
+# determines whether the row runs DETERMINISTICALLY or under the PINNED JUDGE.
+#
+# This is a human-readable shape contract. The executable validator lives in
+# scripts/contracts/eval-matrix.ts (TypeBox), kept in lockstep with this file.
+# ============================================================================
+$id: mutagent-evaluator/eval-matrix
+title: Subject Eval Matrix
+type: object
+required: [subject, version, generatedAt, designPrinciples, components]
+properties:
+  subject:
+    type: string
+    description: synthetic subject name (e.g. sample-agent); NEVER a production dataset name (NDA, design decision #10)
+  version:
+    type: string
+    description: matrix version (e.g. v1); Mode B regenerates/extends as vN
+  generatedAt:
+    type: string
+    description: injected ISO timestamp; masked for byte-identity
+  designPrinciples:
+    type: array
+    items: { type: string }
+    description: the load-bearing design principles the matrix encodes
+  components:
+    type: array
+    items:
+      type: object
+      required: [componentId, componentName, componentType, criteria]
+      properties:
+        componentId: { type: string }
+        componentName: { type: string }
+        componentType:
+          enum: [agent, skill-orchestrator-step, star-command, script, gate, feature, pipeline-stage]
+          description: >-
+            drives the color-coded tint; ordered top-bound first (skill -> agents -> commands -> scripts -> gates).
+            SF-1 additive: feature | pipeline-stage for a multi-stage generation subject (a CHAIN of stages, §6a).
+        criteria:
+          type: array
+          items:
+            type: object
+            required: [dimension, statement, checkMethod, passCondition, severity, existingCoverage]
+            properties:
+              dimension:
+                enum: [operation-correctness, data-correctness, operational-deviation]
+                description: the 3-dimension MECE coverage (R1 / R2 / R3)
+              statement:
+                type: string
+                description: the conformance assertion for this row
+              checkMethod:
+                enum: [deterministic-script, typebox-schema, gate, trace-cross-ref, trajectory-diff, llm-judge]
+                description: >-
+                  deterministic-script | typebox-schema | gate          -> DETERMINISTIC track (no model)
+                  trace-cross-ref | trajectory-diff | llm-judge         -> PINNED-JUDGE track (model id + temp=0)
+                  SF-2 additive (DEC-16): llm-judge = a generic content judge (not only the diagnostics-specific
+                  trace-cross-ref / trajectory-diff). The v2 MinedCriterion carries its own 3-value check_method
+                  router (deterministic | llm-judge | hybrid, eval-types.ts); the two coexist.
+              passCondition:
+                type: string
+                description: the concrete, binary pass condition
+              severity:
+                enum: [CRIT, HIGH, MED, LOW]
+                description: by VARIANCE IMPACT, not code size; CRIT/HIGH gate the component
+              existingCoverage:
+                enum: [covered, partial, none]
+                description: honest declaration vs the actual test+gate inventory
+              evidenceSource:
+                type: string
+                description: mandatory traceability — a cited intended behavior or observed deviation (no-filler rule)

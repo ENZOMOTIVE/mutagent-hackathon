@@ -1,0 +1,217 @@
+# scripts/validate/report-checklist.yaml
+# W14 (F1) — OUTPUT-side finalization checklist.
+#
+# WHAT THIS IS
+#   A declarative, one-row-per-section completeness contract for the *rendered*
+#   `report.html` string. The INPUT side is already gated by
+#   `scripts/validate/completeness-check.ts` (RenderInput JSON, the D-6 render-contract
+#   pass). THIS file drives the OUTPUT side: `scripts/validate/finalize-gate.ts` parses
+#   the produced HTML and asserts, per section, that the data actually LANDED in the
+#   document — catching the bug class where the renderer emitted a soft fallback
+#   (`RANK n/a`, `cost:n/a`), a raw `undefined`/`NaN`, a raw-JSON entity prompt, or an
+#   internal node that survived the client strip.
+#
+# WHY DETERMINISTIC-ONLY
+#   No LLM, no spend, runs every render. DOM/regex/string assertions only (operator
+#   decision 2). Each row is a pure predicate over the HTML body.
+#
+# SELF-HEAL (operator decision 3)
+#   Each row carries `source` (the producer to backtrace to — from
+#   references/script-index.md, the backtrace table) and `heal` (the re-run action).
+#   On a CRIT gap the orchestrator (Step 9.9) backtraces via `source`, re-runs that
+#   producer, re-builds render-input, re-renders, and re-checks. Bounded: max 2 rounds,
+#   then escalate LOUD. NEVER infinite-loop, NEVER silently emit an incomplete report.
+#
+# SCHEMA (per row)
+#   section : stable id (one of the section ids below)
+#   require : tokens/markers that MUST be present AND non-empty in the section's HTML
+#   forbid  : tokens that MUST NOT appear (e.g. 'undefined', 'NaN', 'RANK n/a')
+#   tier    : CRIT (blocks "done") | WARN (loud banner, still emit)
+#   okEmpty : a condition string naming WHEN absence is LEGITIMATE (prevents false-block)
+#   source  : the producer/step to backtrace to (matches script-index.md `Step` column)
+#   heal    : the self-heal action to run when this row's data is missing
+#
+# SCOPING NOTE (forbid tokens)
+#   `forbid` scanning runs over the rendered body with <code>, <pre>, and diff blocks
+#   (.r-diff-grid) STRIPPED first — those legitimately contain literal `undefined` /
+#   `NaN` / `{"prompt"` as quoted evidence/diff content. The finalize-gate strips them
+#   before applying body-level forbids; section-scoped forbids run on the section slice
+#   with the same strip.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GLOBAL CRIT ROWS — whole-body invariants (operator decision F1: "Global CRIT rows")
+# ─────────────────────────────────────────────────────────────────────────────
+
+# SD-8: `null` is scoped to STRUCTURAL slots only. The finalize-gate forbid scan is a
+# literal substring match (`surface.includes(token)`), so a bare `null` token CRIT-fails
+# on prose like "the tool returned null" — observability-hygiene language, not a render
+# bug. `undefined`/`NaN` keep their bare form (they never appear in legitimate prose).
+# For `null` we instead enumerate the token flanked by each structural delimiter
+# (`>` `<` `:` `,` `=` `"`) on either side, so a structural-slot leak (text node
+# `>null<`, JSON `:null,`, attribute `="null"`) still fires while a prose mention does
+# not. Inline JS / <pre> / <code> are already stripped before the scan (stripQuotedRegions).
+- section: global-no-undefined
+  require: []
+  forbid:
+    - "undefined"
+    - "NaN"
+    # `null` in a structural slot — flanked by a structural delimiter on either side.
+    - ">null"
+    - "null<"
+    - ":null"
+    - "null:"
+    - ",null"
+    - "null,"
+    - "=null"
+    - "null="
+    - '"null'
+    - 'null"'
+    - "<null"
+    - "null>"
+  tier: CRIT
+  okEmpty: never
+  source: "8.5 build-render-input.ts (enricher backfills the field a producer forgot)"
+  heal: "re-run Step 8.5 enrich → re-render → re-check (the literal is a forgotten field; the enricher is the backfill point)"
+
+- section: global-client-no-internal
+  require: []
+  # When audience=client, the renderer must emit ZERO internal nodes (it builds them
+  # as "" — NODE-STRIP by omission). Any surviving internal marker is a leak.
+  forbid: ['class="internal"', 'class="internal-banner"', 'class="internal active"', "Methodology [INTERNAL]", "INTERNAL-ONLY"]
+  tier: CRIT
+  okEmpty: "audience=internal (internal reports legitimately carry these nodes)"
+  source: "9 render.ts (audience gate — methodologyPanelHtml/internalBannerHtml must be '' for client)"
+  heal: "re-render with the resolved audience (Step 9 --audience); a client leak means audience was mis-resolved — re-run resolveEffectiveAudience and re-render"
+
+- section: global-remedy-triad
+  require: []
+  # Every remedy header badge triad must be real, not the badgeField() 'n/a' fallback.
+  forbid: ["RANK n/a", "cost:n/a", "correct:n/a", "cost:undefined", "RANK undefined", "b-cost-na"]
+  tier: CRIT
+  okEmpty: "no findings (clean run — no remedy cards exist)"
+  source: "8.5 rank-remedies.ts (enricher derives rank from cost×correctness; cost/correctness are analyzer-supplied, gated at Step 7.1)"
+  heal: "re-run Step 7.1 findings-contract → Step 8.5 rank-remedies → re-render (missing rank/cost/correctness on a remedy)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PER-SECTION ROWS
+# ─────────────────────────────────────────────────────────────────────────────
+
+- section: entity-card
+  require: ['class="entity"', "DIAGNOSED ENTITY", "Type"]
+  # Entity prompt must be humanized prose, never a raw analyzer JSON blob.
+  forbid: ['{"prompt"', '{"messages"', '"role":"system"']
+  tier: CRIT
+  # The entity card lives in the Overview tab, only built on findings-bearing runs
+  # (mirrors completeness-check.ts: zero-finding runs are exempt from section checks).
+  okEmpty: "no findings (entity card only built on findings-bearing runs)"
+  source: "3.7 normalize/platforms/*.ts → EntityContext (deterministic extraction, no LLM)"
+  heal: "re-run Step 3.7 normalize (--out-entity) → Step 8.5a build EntityContext → re-render (entity card starved or prompt not humanized)"
+
+- section: big-stat
+  require: ['class="big-stat"', 'class="s"']
+  forbid: ["undefined", "NaN"]
+  tier: CRIT
+  okEmpty: "no findings (Overview big-stat row only built on findings-bearing runs)"
+  source: "8.5 build-render-input.ts (derives the 6-tile bigStat from tier0 + deepRead)"
+  heal: "re-run Step 8.5 enrich (bigStat derivation) → re-render"
+
+- section: deep-read-tile
+  require: ['class="deep-read-tile"', "coverage confidence"]
+  forbid: ["undefined", "NaN"]
+  tier: WARN
+  okEmpty: "runMeta.deepRead absent (pre-Wave-9 / backward-compat run — tile omitted)"
+  source: "6 deep-read-gate.ts → runMeta.deepRead (escalation telemetry)"
+  heal: "re-run Step 6 deep-read-gate → assign runMeta.deepRead → re-render"
+
+- section: signal-census
+  require: ["Signal / failure-mode", "Present?", "Measure", "Decision"]
+  forbid: ["undefined", "NaN"]
+  tier: CRIT
+  okEmpty: "no findings (census table only built on findings-bearing runs)"
+  source: "8.5 build-render-input.ts (signal-census reconciliation from tier0 + primarySignal)"
+  heal: "re-run Step 8.5 enrich (signal census) → re-render"
+
+- section: heatmap
+  require: ['class="heat"', "timeline heatmap"]
+  forbid: ["undefined", "NaN"]
+  tier: WARN
+  okEmpty: "no findings OR methodologyAudit (no runtime traces → no latency heatmap)"
+  source: "8.5 build-render-input.ts (24h heatmap from trace timestamps)"
+  heal: "re-run Step 8.5 enrich (heatmap derivation) → re-render"
+
+- section: funnel
+  require: ['class="funnel"']
+  forbid: ["undefined", "NaN"]
+  tier: WARN
+  okEmpty: "scanFunnel absent (backward-compat — funnel falls back to 3-segment or omits)"
+  source: "5 slicer.ts / representative.ts → scanFunnel (total→tier0→sample→deep-read)"
+  heal: "re-run Step 5 sampling → assign scanFunnel → re-render"
+
+- section: finding-panel
+  # Finding panels carry the WHAT/WHY/WHERE taxonomy strip + a Problem block.
+  require: ['class="taxonomy"', "WHAT", "Problem"]
+  forbid: ["undefined", "NaN"]
+  tier: CRIT
+  okEmpty: "0 findings on a clean run (legitimate zero-finding diagnosis — no panels expected)"
+  source: "6 analyzer dispatch → 7 aggregate/sort-findings.ts → Finding[]"
+  heal: "re-run Step 6 analyzer dispatch → Step 7 aggregate → Step 8.5 enrich → re-render (findings lost between aggregate and render)"
+
+- section: remedy-card
+  # NB: `class="remedy` (no closing quote) matches both `class="remedy"` and the
+  # recommended-variant `class="remedy recommended"`.
+  require: ['class="remedy', "rank-pill", "remedy-meta"]
+  forbid: ["RANK n/a", "cost:n/a", "correct:n/a", "RANK undefined"]
+  tier: CRIT
+  okEmpty: "no findings (no remedy cards on a clean run)"
+  source: "8.5 rank-remedies.ts (rank derived) + Step 7.1 findings-contract (cost/correctness present)"
+  heal: "re-run Step 7.1 findings-contract → Step 8.5 rank-remedies → re-render"
+
+# ── Methodology sub-sections (INTERNAL audience only) ────────────────────────
+# These rows are scoped to the Methodology [INTERNAL] tab. They are evaluated ONLY
+# when audience=internal (okEmpty covers the client case — the whole tab is stripped).
+# The renderer emits a LOUD `loud-missing-widget` marker when a widget's data was not
+# threaded into runMeta; that marker is itself a CRIT forbid (a forgotten-data tell).
+
+- section: methodology-tier-pie
+  require: []
+  forbid: ['data-widget="tier-coverage pie (tierBreakdown)"']
+  tier: CRIT
+  okEmpty: "audience=client (Methodology tab stripped) OR runMeta.tierBreakdown threaded (widget rendered, no loud marker)"
+  source: "8.5 build-render-input.ts F4 widget-threading → runMeta.tierBreakdown"
+  heal: "thread runMeta.tierBreakdown at Step 8.5 (F4 table) → re-render"
+
+- section: methodology-selection
+  require: []
+  forbid: ['data-widget="signal-selection trace (signalSelectionTrace)"']
+  tier: CRIT
+  okEmpty: "audience=client OR runMeta.signalSelectionTrace threaded"
+  source: "8.5 build-render-input.ts F4 widget-threading → runMeta.signalSelectionTrace / selectionRules"
+  heal: "thread runMeta.signalSelectionTrace + selectionRules at Step 8.5 (F4 table) → re-render"
+
+- section: methodology-awareness
+  require: []
+  forbid: ['data-widget="awareness sample + blind-spots"']
+  tier: CRIT
+  okEmpty: "audience=client OR awareness threaded OR awareness SKIPPED under documented exemption (library priors)"
+  source: "3.5 awareness/llm-sample.ts + blind-spots.ts → runMeta.awarenessSample / blindSpots"
+  heal: "re-run Step 3.5 awareness → assign runMeta.awarenessSample + blindSpots at Step 8.5 → re-render"
+
+- section: methodology-blind-spots
+  require: []
+  # blind-spots share the awareness widget marker; kept as a distinct row so a gap
+  # backtraces to the blind-spots producer specifically.
+  forbid: ['data-widget="awareness sample + blind-spots"']
+  tier: WARN
+  okEmpty: "audience=client OR blindSpots threaded OR awareness SKIPPED (priors)"
+  source: "3.5 awareness/blind-spots.ts → runMeta.blindSpots"
+  heal: "re-run Step 3.5 blind-spots → assign runMeta.blindSpots at Step 8.5 → re-render"
+
+# ── Decisions / copy-back tab (always emitted) ───────────────────────────────
+
+- section: decisions-copyback
+  require: ["Decisions", 'id="lp-body"', 'id="general-feedback"']
+  forbid: ["undefined", "NaN"]
+  tier: CRIT
+  okEmpty: never
+  source: "9 render.ts renderDecisionsTab + renderLivePreviewScript (copy-back HITL surface — PR-014)"
+  heal: "re-render (the Decisions tab is template-stamped; absence means a render/template regression — re-run Step 9 render)"

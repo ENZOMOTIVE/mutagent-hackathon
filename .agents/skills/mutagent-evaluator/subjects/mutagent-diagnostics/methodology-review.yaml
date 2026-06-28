@@ -1,0 +1,105 @@
+# subjects/mutagent-diagnostics/methodology-review.yaml
+# ============================================================================
+# The MR-1..9 rubric for the diagnostics subject (Tab-4 — fitness, not
+# conformance). Conforms to schemas/methodology-review.schema.yaml. The
+# methodology-critic lens reads these items; all are advisory (never gate).
+#
+# MR-7/8/9 are the concrete instances of the generic engine: signal-selection,
+# confidence-derivation, focus-determination — the highest-leverage methodology
+# decisions for diagnostics. For ANY subject the evaluator judges sub-decisions
+# the same way (expected-decision vs observed-decision at each behavior-tree node).
+#
+# NDA: synthetic identifiers only. generatedAt is a fixed sentinel (masked).
+# ============================================================================
+subject: mutagent-diagnostics
+version: v1
+generatedAt: '1970-01-01T00:00:00.000Z'
+
+items:
+  - id: MR-1
+    title: Decision-tree fitness
+    reads: behavior-tree.yaml + run outcomes
+    how: >-
+      Judge reasons over each fork in the methodology (Step 3a scope-pick · 4.5
+      library/double-zero · 6 analyzer-count · copy-back) vs what the run
+      actually needed; flags dead / rarely-useful / mis-placed forks.
+    family: decision-tree-fitness
+    advisory: true
+
+  - id: MR-2
+    title: Data-flow efficiency
+    reads: normalize -> tier0 -> slice -> sample -> enrich -> render trace
+    how: >-
+      Scans the data pipeline for duplicated/recomputed transforms, stages that
+      could collapse or parallelize, artifacts produced-and-never-consumed.
+    family: data-flow-efficiency
+    advisory: true
+
+  - id: MR-3
+    title: Methodology fitness GIVEN the findings
+    reads: run trajectory + findings
+    how: >-
+      Was the deep-read tier / analyzer count / sampling over- or under-scaled
+      for what the findings turned out to be? Over-investigation = cost; under =
+      missed signal.
+    family: methodology-fitness
+    advisory: true
+
+  - id: MR-4
+    title: Sequence soundness
+    reads: transcript trajectory
+    how: >-
+      Reactive one-at-a-time crash patching, re-dispatch loops, redo-after-
+      failure = methodology smells that say the order/contract is wrong, not
+      just the code.
+    family: sequence-soundness
+    advisory: true
+
+  - id: MR-5
+    title: Process self-feedback
+    reads: all of the above
+    how: >-
+      Concrete, impact-ranked recommendations to restructure the methodology
+      itself (collapse a stage, drop a fork, re-order, pin a choice) — advisory.
+    family: process-self-feedback
+    advisory: true
+
+  - id: MR-6
+    title: Followed != Right
+    reads: matrix (Tab-1) vs this (Tab-4)
+    how: >-
+      A methodology can score 100% conformance (Tab-1) and still be the wrong/
+      inefficient choice; this family answers the second question independently.
+    family: conformance-vs-fitness
+    advisory: true
+
+  - id: MR-7
+    title: Signal / failure-mode SELECTION
+    reads: tier0 -> awareness -> deep-read -> reconcile chain
+    how: >-
+      Judge whether the primary signal was grounded in the RIGHT tier of
+      evidence (mechanical {loop·latency·cost} vs deep-read-evidenced failure-
+      WHAT) — not a frequency artifact or an unsupported pick. Highest-leverage
+      methodology decision: it steers everything downstream.
+    family: signal-selection
+    advisory: true
+
+  - id: MR-8
+    title: CONFIDENCE derivation
+    reads: coverageConfidence + primarySignal.confidence vs the deep-read sample
+    how: >-
+      Judge whether the confidence actually FOLLOWS from the LLM-trace evidence +
+      sample representativeness — catches 'high confidence on a 1/1/1/137
+      imbalanced sample': a number asserted, not earned.
+    family: confidence-derivation
+    advisory: true
+
+  - id: MR-9
+    title: FOCUS determination -> search-shaping
+    reads: scope/focus decision + which traces were then examined
+    how: >-
+      Because focus CHANGES the search, a wrong/early focus mis-steers every
+      downstream trace selection. Expected-focus vs observed-focus given the
+      brief + tier-0 signals.
+    family: focus-determination
+    advisory: true

@@ -1,0 +1,66 @@
+# schemas/dataset.schema.yaml
+# ============================================================================
+# The SHAPE a generated/derived eval DATASET must conform to (EV-046 build +
+# EV-047 derive + EV-053 living-suite append target).
+#
+# A dataset is the subject's growing set of test CASES: each case is one
+# combination of dimension values (a tuple) plus a realistic natural-language
+# query. Cases come from three sources: user-confirmed SEED tuples (the HITL
+# interview), SYNTHETIC extension (the dataset-builder agent), or DERIVED from a
+# past trace (*derive-dataset). The set is APPEND-ONLY (monotonic growth — the
+# suite never shrinks).
+#
+# Subject-agnostic (EV-002): dimensions + values are DATA carried here, never
+# hard-coded engine constants. This is a human-readable shape contract; the
+# executable validator lives in scripts/contracts/dataset.ts (TypeBox), kept in
+# lockstep with this file.
+# ============================================================================
+$id: mutagent-evaluator/dataset
+title: Subject Eval Dataset
+type: object
+required: [subject, dimensions, cases, version]
+properties:
+  subject:
+    type: string
+    description: synthetic subject name (from the subject profile); NEVER a production dataset name (NDA)
+  dimensions:
+    type: array
+    description: the axes of variation (generate-synthetic-data Step 1); target failure-prone regions
+    items:
+      type: object
+      required: [name, values]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        values:
+          type: array
+          minItems: 1
+          items: { type: string }
+          description: the discrete values this dimension can take
+  cases:
+    type: array
+    description: the test cases (append-only; monotonic-growth enforced by living-suite EV-053)
+    items:
+      type: object
+      required: [id, tuple, query, source]
+      properties:
+        id:
+          type: string
+          description: content-derived stable id (caseId = fnv1a(tupleKey::query)); re-builds collide -> dedup
+        tuple:
+          type: object
+          description: dimension name -> chosen value (≥1 assignment); canonicalized by tupleKey for dedup
+          additionalProperties: { type: string }
+        query:
+          type: string
+          description: the natural-language query realizing this tuple (from the dataset-builder agent)
+        source:
+          enum: [seed, synthetic, derived]
+          description: seed = user-confirmed HITL tuple | synthetic = LLM-generated | derived = distilled from a past trace
+        originTraceId:
+          type: string
+          description: for derived cases — the past trace this case distills from
+  version:
+    type: integer
+    minimum: 0
+    description: monotonically-increasing version, bumped on every append

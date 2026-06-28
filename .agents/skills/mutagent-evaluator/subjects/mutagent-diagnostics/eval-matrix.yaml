@@ -1,0 +1,1231 @@
+# subjects/mutagent-diagnostics/eval-matrix.yaml
+# ============================================================================
+# The FIRST generated subject profile (Mode B output) — data, NOT code in the
+# agent. 132 criteria across 70 components, conforming to
+# schemas/eval-matrix.schema.yaml. Ordered skill -> agents -> commands ->
+# scripts. The agent ships ZERO subject-specific logic; this is the data.
+#
+# NDA: synthetic subject identifiers only — no production dataset is named.
+# generatedAt is a fixed sentinel (masked for byte-identity).
+# ============================================================================
+subject: mutagent-diagnostics
+version: v1
+generatedAt: '1970-01-01T00:00:00.000Z'
+designPrinciples:
+- 'Determinism-before-judgment: prefer deterministic-script / typebox-schema / gate checks; reserve llm-judge and trajectory-diff only for criteria that genuinely need runtime-behavior or semantic judgment (sequence order, scope-grounding, model-pin verification). The vast majority of rows are mechanically checkable.'
+- 'Severity by variance-impact, not code size (manual §3.3): CRIT = flips a headline/primary signal, crashes render, blocks the deliverable, or is a dominant inter-run variance driver (model/temperature pin, configRoot, runId, latency short-circuit, OOM ingest). HIGH = materially changes sample composition/finding count/coverage honesty. MED/LOW = interpretation/capability/escalation gaps.'
+- 'Recurring dogfood deviations are the proven checklist rows: any deviation marked recurring:true is treated as a load-bearing, must-have criterion (graded at its observed severity) rather than a nice-to-have; one-off deviations are still included but weighted lower.'
+- 'Three-dimension MECE coverage per component: every component is graded on operation-correctness (sequence right + op did its job), data-correctness (input AND output contracts), and operational-deviation (expected-vs-observed trajectory). A dimension is omitted for a component only when it has no checkable surface there, never to pad.'
+- 'Full-dereference-surface gate principle (C-GATE): a validation gate must cover the ENTIRE contract its downstream consumer dereferences and fail-loud ONCE listing all gaps — partial gates (presence-only while the consumer reads sub-fields) are themselves graded as defects (completeness-check, findings-contract, deep-read-gate attestation).'
+- 'Pin-and-record every stochastic/environmental variable (C-PIN), honoring model-intent-sacred: model ID + temperature=0, seed, runId-namespace, configRoot, injected --generated-at are pinned AND written into runMeta.decisions so the Methodology tab is the audit surface. No silent model swaps; fallbacks surface as variance warnings.'
+- 'Byte-identity masking contract as the determinism acceptance test: the run-pair scorecard diffs each artifact across two back-to-back runs (then a second machine) AFTER masking the declared injected-timestamp + runId fields; the variance score = count of differing scorecard dimensions, and that score (not vibes) is the pass/fail signal.'
+- 'Expected-trajectory captured as a golden spec: the self-diagnosis-contract.yaml 10-category success_criteria is the integration-level golden the end-to-end *diagnose run is scored against; per-step trajectory sentinels (per-run stamps) verify the protocol executed in declared dependency order.'
+- 'Scope-locus attribution for every criterion (MECE SKILL/AGENT/COMMAND): each criterion''s checkMethod follows the root-cause locus — code bugs → deterministic-script on the .ts (COMMAND); missing/ambiguous spec or unwired contract → typebox-schema/gate on the contract (SKILL); runtime improvisation → trajectory-diff/trace-cross-ref on the orchestrator behavior (AGENT). Cure-the-twin: an AGENT criterion passes only when its SKILL/COMMAND twin also holds.'
+- 'Existing-coverage honesty: each row declares covered/partial/none against the actual test+gate inventory; ''partial'' is reserved for gates that exist but under-validate (e.g. findings-contract checks failureOrigin presence but not its sub-fields), making the partial gates the highest-leverage hardening targets.'
+- 'Per-run scorecard rolls up per-component: a single RUN is graded by aggregating each component''s 3-dimension criteria into the fixed determinism scorecard, appended to the metalearn JOURNAL each round so variance reduction is tracked longitudinally and the operator does not re-give feedback per run.'
+- 'No-filler rule: every criterion is grounded in a cited intended behavior or an observed deviation (evidenceSource is mandatory and traceable to the registry, the deviation catalog, the manual, or an enumerated coverage gap); criteria with FAIL-today notes are spot-verified against HEAD loci (e.g. render.ts:632, langfuse.ts:119, buildSignalCensus:223).'
+components:
+- componentId: orchestrator-step-0
+  componentName: Step 0 - Capability Check
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: Boot probe verifies Agent + AskUserQuestion capability before any dispatch; on unsupported runtime it HALTs with actionable guidance rather than failing mid-pipeline.
+    checkMethod: deterministic-script
+    passCondition: Probe returns a capability verdict; missing capability → halt+guidance, never silent proceed to Step 6 dispatch.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: intendedBehavior Step 0 (P3 DEFERRED, currently assumes available)
+- componentId: orchestrator-step-1
+  componentName: Step 1 - Config Detection
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: 'detect.ts routes correctly on agentsBoundary state: missing→install, pending-restart→restart, invalid→reinstall, ready→proceed; partial/missing config routes to onboarding.'
+    checkMethod: deterministic-script
+    passCondition: For each SetupState input, the emitted route matches the declared mapping (unit matrix over the 4 boundary states × 3 config states).
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: intendedBehavior; existing CLI routing unit tests (init-scope, install-agents)
+  - dimension: data-correctness
+    statement: SetupState output validates against schema (state∈{complete,partial,missing}, agentsBoundary∈{ready,missing,pending-restart,invalid}); config.yaml validated against TypeBox ConfigSchema before proceed.
+    checkMethod: typebox-schema
+    passCondition: config validate.ts exit 0 against schema.ts; SetupState enum-conformant.
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: script-config-validate; schema.ts single source of truth PR-009
+- componentId: orchestrator-step-2
+  componentName: Step 2 - Score-Scale Auto-Discovery
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: data-correctness
+    statement: Scale classification (boolean/discrete-1-5/discrete-1-10/continuous-0-1/categorical) and negative-threshold mapping match the source platform's actual scale; categorical scales prompt operator rather than auto-guessing.
+    checkMethod: deterministic-script
+    passCondition: ScaleType + threshold derived from {source-cli} scores output; categorical→AskUserQuestion path taken; cached value matches platform.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: intendedBehavior Step 2 auto-discovery; downstream score-filter correctness depends on it
+  - dimension: operational-deviation
+    statement: Weekly cache is keyed by platform and not staler than its TTL; a stale or cross-platform cache entry is not silently reused.
+    checkMethod: deterministic-script
+    passCondition: cache/scale-{platform}.json carries a timestamp; reuse only within TTL; cross-platform key never read.
+    severity: LOW
+    existingCoverage: none
+    evidenceSource: intendedBehavior cache weekly
+- componentId: orchestrator-step-3
+  componentName: Step 3 - NL to TraceFilter Translation
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: When the brief forks into 3+ interpretations, a batched multi-Q AskUserQuestion with concrete previews fires (no inline prose ask, no silent single-interpretation pick).
+    checkMethod: trajectory-diff
+    passCondition: Transcript shows AskUserQuestion with ≥3 options each carrying a preview when fork detected; absent when unambiguous.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: feedback_ask_user_question_with_previews; intendedBehavior multi-Q batched
+  - dimension: data-correctness
+    statement: Emitted TraceFilter fields and the platform CLI invocation flags are consistent with the resolved scale (e.g. scoreBelow uses the Step 2 midpoint) and the per-platform filter-search-matrix.
+    checkMethod: deterministic-script
+    passCondition: TraceFilter validates against schema; CLI flag string matches filter-search-matrix.md for the platform; scoreBelow threshold == Step 2 midpoint.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: intendedBehavior; filter-search-matrix per-platform flags
+- componentId: orchestrator-step-3a
+  componentName: Step 3a - Parse Brief + Scope Resolution
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: parse-brief.ts never throws and never drops the brief; on scopeType null it triggers the scope picker (AskUserQuestion) rather than guessing skill-vs-agent scope.
+    checkMethod: deterministic-script
+    passCondition: Parser returns ParsedBrief for all inputs incl. adversarial; scopeType null → picker fires; covered by parse-brief.test.ts.
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: intendedBehavior never-throws; existing parse-brief unit tests
+  - dimension: data-correctness
+    statement: Verbatim operator brief is stored byte-for-byte in runMeta.operatorInvocation (D2), and entity identity resolves through config.agents[] cross-platform identity map (not re-derived ad hoc).
+    checkMethod: deterministic-script
+    passCondition: runMeta.operatorInvocation === input brief string exactly; resolved entity matches a config.agents[] identity pointer.
+    severity: MED
+    existingCoverage: partial
+    evidenceSource: intendedBehavior D2/W11-07; library/store records operatorInvocation verbatim
+- componentId: orchestrator-step-3.5
+  componentName: Step 3.5 - Awareness Layer
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: On a fresh run (no confirmed library priors), the 5-trace LLM mini-sample + blind-spots scan actually executes BEFORE Step 4 signal pick; it is skipped ONLY when a confirmed library match exists.
+    checkMethod: gate
+    passCondition: 'awareness-witness stamp: isFreshRun=true + awarenessRan=false + no exemptionReason → HARD-FAIL (wave6-checklist W11-05).'
+    severity: HIGH
+    existingCoverage: covered
+    evidenceSource: intendedBehavior R2.2; wave6-checklist W11-05 gate already enforces this
+  - dimension: data-correctness
+    statement: runMeta.awarenessSample is threaded from llm-sample.ts discoveredSignals output (script is source of truth); the orchestrator does NOT hand-author/override discoveredSignals by eyeballing traces.
+    checkMethod: trace-cross-ref
+    passCondition: runMeta.awarenessSample.signals == llm-sample.ts stamped output; no orchestrator-invented signals not present in the script artifact.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: AGT-08 orchestrator hand-read 5 traces again and invented discoveredSignals; script output not used
+  - dimension: data-correctness
+    statement: BlindSpots table rows are well-formed {signal, measurable, checkedBy, result} and distinguish Tier-0-measurable signals from genuine blind-spots.
+    checkMethod: typebox-schema
+    passCondition: blindSpots.rows validate against BlindSpotRow shape; every awareness-discovered signal appears as a row.
+    severity: LOW
+    existingCoverage: partial
+    evidenceSource: intendedBehavior R2.2; wave6-checklist blind-spots stamp presence
+- componentId: orchestrator-step-3.7
+  componentName: Step 3.7 - Normalize
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: Normalization uses the mandated per-platform normalizer via INTERNAL CLI transport and never falls back to inline jq/sed/awk hand-rolling (R-SELF-03-c) except via a documented TODO exemption.
+    checkMethod: trajectory-diff
+    passCondition: Transcript shows scripts/normalize/platforms/{platform}.ts invoked; zero inline jq/sed/awk in the normalize step absent a logged exemption.
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'RC-INGEST/CMD-01: OOM forced orchestrator to hand-roll jq; CMD-09/AGT-07 hand-wrote skeleton.jq'
+  - dimension: operation-correctness
+    statement: Ingest streams large NDJSON-gz files (>500MB / multi-GB) without OOM; no unconditional readFileSync + JSON.parse on the full export.
+    checkMethod: deterministic-script
+    passCondition: Normalizer processes a synthetic >2GB fixture without OOM (streaming path exercised); readFileSync-of-whole-file absent.
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'RC-INGEST: readFileSync+JSON.parse OOMed on 2.84GB source (master-audit L72-73, recurring)'
+  - dimension: data-correctness
+    statement: langfuse latency heuristic performs the span check BEFORE short-circuiting on latencyRaw>=60, so a 54s run is recorded as 54000ms (not mistaken for 54ms→10s p50 flip).
+    checkMethod: deterministic-script
+    passCondition: 'Unit case: latencyRaw=54 with span>1000ms → 54000ms; p50 magnitude stable. (langfuse.ts:119 currently short-circuits before span guard at :132 → FAIL.)'
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'CMD-02/SKL-02: verified langfuse.ts:119 short-circuit before span guard, 10s↔54s headline flip (recurring, dominant variance)'
+  - dimension: data-correctness
+    statement: config.source.latency_unit ('auto'|'ms'|'s') is actually read by the normalizer and threaded into the latency computation + logged to runMeta.decisions (declared-and-wired, not declared-only).
+    checkMethod: deterministic-script
+    passCondition: Setting latency_unit='s' changes normalizer output; runMeta.decisions records the resolved unit. (langfuse.ts:110-112 doc-promises but body ignores → FAIL.)
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'SKL-02: verified langfuse.ts:110-112 field declared but never read; correction lever non-functional (recurring)'
+  - dimension: operational-deviation
+    statement: id-less source records (claude-code/codex/local-jsonl) mint a deterministic content-hash traceId stable across runs — not 'cc-${Date.now()}' / 'codex-${Date.now()}'.
+    checkMethod: deterministic-script
+    passCondition: Two runs on byte-identical id-less source produce identical traceIds (MD5 match); no Date.now() in id minting.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'SKL-09: all normalizers mint id-less IDs from Date.now() → different dedup/sample composition per run (recurring)'
+  - dimension: data-correctness
+    statement: 'EntityContext extraction is complete and labeled: inputSample.text unwraps the JSON envelope to human prose; systemPrompt is explicitly labeled ''absent'' when missing (not silently omitted); newest-trace used for entity context.'
+    checkMethod: deterministic-script
+    passCondition: entity-context.json inputSample is prose not literal '{"prompt":...}'; systemPrompt key present with absent-label when no system prompt in export.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'ISSUE 2/DC-2: inputSample shows raw escaped JSON; systemPrompt undefined-not-labeled (recurring)'
+  - dimension: data-correctness
+    statement: toolInventory excludes framework noise (agent.step.*, SDK root spans, aliased duplicates) and computes callsPerTrace over POPULATION with an explicit scope label (not sample-scoped inflated figures).
+    checkMethod: deterministic-script
+    passCondition: toolInventory rows exclude agent.step.*/SDK/duplicates; callsPerTrace denominator == population N and carries a scope label.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'ISSUE 5/6: 56 raw observation names incl 11 agent.step + 3 SDK + 21 dups; callsPerTrace 22.67 sample-scoped vs 0.07 population (~324× inflation, recurring)'
+  - dimension: operational-deviation
+    statement: The normalizer's EntityContext extractor has a real CLI entrypoint (import.meta.main) the orchestrator calls deterministically; it is not export-only forcing inline glue that silently drops diagnosedEntity.
+    checkMethod: deterministic-script
+    passCondition: langfuse.ts entity extractor invocable via CLI flags (--out-entity); orchestrator never hand-wires EntityContext inline.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: 'OP-8/master-audit L05: extractLangfuseEntityContext exported but no import.meta.main; diagnosedEntity silently drops (recurring)'
+- componentId: orchestrator-step-4
+  componentName: Step 4 - Tier 0 Static Scan
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: tier0-scan.ts runs deterministically on normalized traces BEFORE any LLM dispatch (PR-001), producing Tier0Report with no network/clock dependence.
+    checkMethod: deterministic-script
+    passCondition: Two runs on identical traces-metadata.json produce byte-identical Tier0Report; scan precedes Step 6 in the trajectory.
+    severity: HIGH
+    existingCoverage: covered
+    evidenceSource: intendedBehavior PR-001; existing tier0-scan unit tests
+  - dimension: data-correctness
+    statement: Tier-0 emits ONLY mechanically-legitimate signals (loops, latency, cost) or deep-read-evidenced signals; platform-metadata artifacts (e.g. low-tagging-rate when tags=[]) are NOT promoted as failure signals.
+    checkMethod: deterministic-script
+    passCondition: For a fixture with empty tags, LF-002 low-tagging-rate is NOT emitted as a failure signal into the census candidate set.
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: 'RC-SIGNAL/ISSUE 1: LF-002 low-tagging-rate fires 100% on tags=[], promoted into census (feedback_signal_discipline_evidence_first, recurring)'
+- componentId: orchestrator-step-4.5
+  componentName: Step 4.5 - Library-First Match
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: Double-zero anti-laziness gate HARD-REFUSES when priors===0 AND llmReads===0; empty library alone is valid (proceed fresh + log to runMeta.decisions).
+    checkMethod: gate
+    passCondition: match.ts returns refuse when both zero; empty-library-with-reads proceeds; decision logged.
+    severity: HIGH
+    existingCoverage: covered
+    evidenceSource: intendedBehavior R2.3/W9-02; existing library unit tests + deep-read-gate
+  - dimension: data-correctness
+    statement: Library matches are merged into the Tier-0 report at the declared 3× weight; the exemption-to-skip-awareness is recorded only when a prior is actually confirmed.
+    checkMethod: deterministic-script
+    passCondition: libraryMatches weighting == 3×; awareness-skip exemptionReason present iff a confirmed prior exists.
+    severity: MED
+    existingCoverage: partial
+    evidenceSource: intendedBehavior R2.3 3× weight; wave6 library-match stamp
+- componentId: orchestrator-step-5
+  componentName: Step 5 - Dynamic-Cluster Slicing
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: Slicer caps at ≤5 slices and groups by error/feedback/latency cluster when a Tier-0 signal is present, falling back to window-based only when no signal; cap_enforced is honest.
+    checkMethod: deterministic-script
+    passCondition: SlicePlan.slices.length≤5; rationale is cluster-based when signal present, 'Window-based' only when absent; cap_enforced flag matches.
+    severity: MED
+    existingCoverage: partial
+    evidenceSource: intendedBehavior PR-017; slicer is pure Type A (deterministic)
+  - dimension: data-correctness
+    statement: 'Slice plan is deterministic: identical Tier0Report + traces-metadata produce byte-identical SlicePlan (stable trace assignment, no clock/random).'
+    checkMethod: deterministic-script
+    passCondition: Two runs → identical SlicePlan JSON after masking; traceIds partitioned without overlap.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: scorecard sample-composition dimension; determinism design principle
+- componentId: orchestrator-step-5b
+  componentName: Step 5b - Slicer-Override Decision
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: 'Override predicate is exact: switch to representative 4-bucket sample iff rationale starts ''Window-based'' AND parsedInvocation.focus non-null; keep window plan when focus null.'
+    checkMethod: deterministic-script
+    passCondition: Truth-table over (rationale prefix × focus null/non-null) matches declared switch; no over/under-firing.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: intendedBehavior PRD-MP-02
+  - dimension: operational-deviation
+    statement: Every override (and every keep) is recorded in runMeta.samplingOverride with a reason — a real decision, not a silent strategy swap.
+    checkMethod: deterministic-script
+    passCondition: runMeta.samplingOverride present with {fired, reason} whenever Step 5b runs.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: 'Gaps: ''No validation that samplingStrategy matches the strategy executed''; PR-043 decision-logging'
+- componentId: orchestrator-step-5.5
+  componentName: Step 5.5 - Caps
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: enforceCaps evaluates first-to-trip with max-trace(50)+time(600s) ACTIVE and cost(10) INACTIVE by default (D1); inactive caps are skipped, not silently enforced.
+    checkMethod: deterministic-script
+    passCondition: CapsResult.firstToTrip correct across boundary inputs; inactive cost cap never trips when active=false.
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: intendedBehavior Wave-6 D1; caps.ts with injected clock + unit tests
+  - dimension: operational-deviation
+    statement: The caps clock is injected (not wall-clock), so cap evaluation is reproducible; the resolved caps config and firstToTrip are recorded.
+    checkMethod: deterministic-script
+    passCondition: Two runs with identical injected clock → identical CapsResult; resolved caps in runMeta.
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: intendedBehavior 'Clock injected'; determinism principle
+- componentId: orchestrator-step-6-pregate
+  componentName: Step 6 Pre-Gate - Deep-Read Gate
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: Deep-read gate HARD-REFUSES llmReadCount===0 && !priorSignalsRef before any analyzer dispatch; --focus does NOT exempt; refusal routes to documented exemption or HALT+ASK (never prose bypass).
+    checkMethod: gate
+    passCondition: deep-read-gate.ts refuses on double-zero; focus-present-zero-reads still refuses; no prose-bypass path.
+    severity: CRIT
+    existingCoverage: covered
+    evidenceSource: intendedBehavior R2.1/PR-035; existing deep-read-gate logic
+  - dimension: data-correctness
+    statement: The gate counts REAL evidence (distinct traceIds across evidence files), not the self-reported --llmReadCount argument; it HARD-REFUSES on arg-vs-actual mismatch.
+    checkMethod: deterministic-script
+    passCondition: Gate derives count from evidence files; passing --llmReadCount 100 while 40 traces analyzed → refuse.
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'AGT-13: gate trusts orchestrator --llmReadCount arg, never counts evidence files → attestation bypass (recurring)'
+- componentId: orchestrator-step-6-escalation
+  componentName: Step 6 - Trace-Hungry Escalation Loop
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: Escalation tiers [100,250,500,1000] are walked with ceiling=min(population,1000); the loop stops on isSufficient OR time-budget OR ceiling, and the stopReason is recorded.
+    checkMethod: deterministic-script
+    passCondition: runMeta.deepRead carries {tierReached, llmReadCount, stopReason∈{evidence-sufficient,ceiling-reached,time-budget}, batches[]}; ceiling==min(pop,1000).
+    severity: MED
+    existingCoverage: partial
+    evidenceSource: intendedBehavior W9-09/PR-048
+  - dimension: operational-deviation
+    statement: 'Coverage justification is defensible: (totalTraces − llmReadCount) is consistent with the declared deepRead.stopReason (e.g. stopReason=evidence-sufficient is not claimed at <1% worst-bucket coverage).'
+    checkMethod: deterministic-script
+    passCondition: 'Algorithmic check: stopReason=evidence-sufficient requires coverageConfidence==''high'' per representative sampler; otherwise gate flags.'
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'Gaps: ''No check that totalTraces minus llmReadCount is defensible under deepRead.stopReason'''
+- componentId: orchestrator-step-6-dispatch
+  componentName: Step 6 - Analyzer Dispatch
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: Analyzer count is derived from a deterministic formula over (population, sliceCount, override) per criteria a-e (override→1; identical scope→1; ≤30→1; 30-50→2; >50 diverse→min(sliceCount,5)); cap ≤5 enforced.
+    checkMethod: deterministic-script
+    passCondition: recommendDispatch(population,sliceCount,estimatedSlots) yields identical (n,analyzerCount) for identical input; ≤5 always. (No locked formula in caps.ts currently → FAIL.)
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'SKL-05/AGT-04: no locked formula, orchestrator recalls n=140/4-analyzers from MEMORY → different (n,analyzerCount) per run (recurring)'
+  - dimension: data-correctness
+    statement: The handover_contract YAML dispatched to each analyzer embeds the FULL Finding/Remedy/Assumption JSON-Schema with types/enums + a concrete example (not field-names-only); AssumptionSchema is exported.
+    checkMethod: deterministic-script
+    passCondition: handover-contract.md contains the embedded schema + example; AssumptionSchema exported from trace.ts; analyzers produce zero-RESEND output.
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: 'SKL-04/AGT-10: contract lists field names only, no example, AssumptionSchema unexported → 15 findings rejected (recurring)'
+  - dimension: operational-deviation
+    statement: Fallback to general-purpose agent (when diagnostics-analyzer unregistered) is surfaced as a determinism-degrading variance warning in Methodology, pre-gated by verify-agents.ts HALT+ASK — not a silent model swap.
+    checkMethod: gate
+    passCondition: verify-agents.ts run before dispatch; fallback_used=true raises a visible warning banner; runMeta records the model swap.
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: 'AGT-14: silent swap to general-purpose (different model), fallback_used logged but not surfaced (recurring); feedback_model_intent_sacred'
+  - dimension: operational-deviation
+    statement: The dispatch decision {analyzerCount, reason, slicesUsed} is recorded in runMeta as a genuine CHOICE between alternatives.
+    checkMethod: deterministic-script
+    passCondition: runMeta.dispatch present with analyzerCount + reason naming the criterion that fired.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: 'Gaps: ''No automatic check that Decisions section lists CHOICES made'' (Step 6 fan-out choice)'
+- componentId: orchestrator-step-7
+  componentName: Step 7 - Aggregate + Deduplicate Findings
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: Deduplication keys on (traceId, failureOrigin.what+why+where) and clusters correlated findings across analyzers via a deterministic (not LLM, not readdir-order) merge.
+    checkMethod: deterministic-script
+    passCondition: A mandated cluster-findings script produces identical dedup/cluster output across runs on identical analyzer inputs.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: intendedBehavior dedup key; RC-CLUSTER; merge currently order-dependent
+  - dimension: operational-deviation
+    statement: The merged findings array is sorted by a stable key (severity desc, failureOrigin.what, findingId) AFTER dedup+cluster, so headline/tab order and the ★-recommended remedy are byte-identical across runs.
+    checkMethod: deterministic-script
+    passCondition: Two runs → identical finding order (stable sort); not filesystem readdir / completion-time order.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'CMD-11/RC-MERGE-ORDER: no sort specified, order = analyzer completion/readdir, headline varies per run (recurring)'
+- componentId: orchestrator-step-7.1
+  componentName: Step 7.1 - Findings-Contract Gate
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: On contract failure the gate emits RESEND directives and redispatches the offending slice's analyzer (max 2 attempts), dropping with INCOMPLETE_FIELDS marker on exhaustion — never silently passing malformed findings.
+    checkMethod: deterministic-script
+    passCondition: findings-contract.ts exit 1 → RESEND per offending finding; 2-attempt cap honored; drop marker logged.
+    severity: HIGH
+    existingCoverage: covered
+    evidenceSource: intendedBehavior W12-07; existing findings-contract validator + RESEND test suite
+  - dimension: data-correctness
+    statement: The gate validates the FULL contract the renderer dereferences — including failureOrigin.evidence non-empty + confidence enum, and diff XOR diffStatus — not just field presence.
+    checkMethod: typebox-schema
+    passCondition: failureOrigin:{} is REJECTED (not passed); exactly-one-of diff/diffStatus enforced. (Current validator checks failureOrigin non-null only → partial.)
+    severity: CRIT
+    existingCoverage: partial
+    evidenceSource: 'CMD-06/SD-4: failureOrigin:{} passes gate then crashes renderer on .confidence deref (recurring)'
+- componentId: orchestrator-step-8
+  componentName: Step 8 - RCA Layer
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: data-correctness
+    statement: Each finding's WHAT/WHY/WHERE values are drawn from the closed enums; the why-chain recurses to an isOrigin:true terminal and each link is evidence-grounded (cites a sourceTraceId).
+    checkMethod: typebox-schema
+    passCondition: WHAT/WHY/WHERE ∈ declared enums; whyChain terminates isOrigin:true; every link has evidence ref.
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: intendedBehavior PR-002/018/020; findings-contract checks presence not enum-conformance of taxonomy
+  - dimension: operational-deviation
+    statement: Remedies are ranked by cost×correctness deterministically; the ★-recommended remedy is reproducible across runs given pinned model/temperature.
+    checkMethod: deterministic-script
+    passCondition: Given identical findings + pinned model, remedy ranking + ★ selection is identical across 2 runs.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'RC-LLM-PIN/AGT-12: RCA runs at default model/temp → different whyChains/remedies per run (recurring, dominant variance)'
+  - dimension: operation-correctness
+    statement: 'RCA LLM steps run at a pinned model ID + temperature=0; the resolved model and temperature are recorded in runMeta.decisions (model-intent-sacred: no silent swap).'
+    checkMethod: trace-cross-ref
+    passCondition: runMeta.decisions records resolved model ID + temperature matching the agent-frontmatter pin; no default-model usage.
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'AGT-12/RC-LLM-PIN: no model/temperature pin anywhere; acknowledged dominant variance source (recurring); feedback_model_intent_sacred'
+- componentId: orchestrator-step-8.5a
+  componentName: Step 8.5a - Build EntityContext
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: data-correctness
+    statement: diagnosedEntity is pulled from entity-context.json (Step 3.7 normalizer output) via the enricher's --entity-context flag — never hand-filled (R1.7); --entity-context takes precedence over findings.entities[0] with a warn on conflict.
+    checkMethod: deterministic-script
+    passCondition: Enricher invoked with --entity-context; diagnosedEntity == entity-context.json; conflict path logs override+warn.
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: intendedBehavior PRD-MP-04/R1.7; OP-8 inline injection banned by R-SELF-03-c
+  - dimension: operation-correctness
+    statement: No inline bun -e injection is used to build EntityContext (R-SELF-03-c); the artifact comes from the mandated normalizer CLI.
+    checkMethod: trajectory-diff
+    passCondition: Transcript shows no inline bun -e / heredoc building entity-context; only the normalizer CLI call.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: intendedBehavior R-SELF-03-c ban; feedback_skill_script_austerity
+- componentId: orchestrator-step-8.5
+  componentName: Step 8.5 - Build Render Input
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: data-correctness
+    statement: signalCensus ranks by impact×prevalence via the PR-049 5-step reconciled process (with a failure-validity gate dropping benign/observability artifacts) — NOT by matchCount/frequency alone; exactly ONE runMeta.primarySignal emerges with ruledOut[].
+    checkMethod: deterministic-script
+    passCondition: buildSignalCensus orders by impact×severity and filters hygiene artifacts; low-tagging-rate cannot be primary. (Line 223 currently sorts by matchCount desc → FAIL.)
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'ISSUE 1/DC-1: verified buildSignalCensus:223 sorts by matchCount; low-tagging-rate surfaced as PRIMARY contradicting 134-trace findings (recurring)'
+  - dimension: operation-correctness
+    statement: 'build-render-input.ts is deterministic and idempotent: no LLM, no network, no wall-clock/random except the injected --generated-at; two runs produce byte-identical RenderInput after masking generated-at.'
+    checkMethod: deterministic-script
+    passCondition: MD5 match of RenderInput across 2 runs after masking --generated-at; no Date.now()/Math.random in the enricher.
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: intendedBehavior deterministic enricher; scorecard runMeta byte-identity dimension
+  - dimension: operation-correctness
+    statement: escapeBadge / decisionLog mapper tolerate undefined inputs (no TypeError on missing rationale/decision fields).
+    checkMethod: deterministic-script
+    passCondition: 'Unit case: decision with missing rationale → no throw; escapeBadge(undefined) safe. (escapeBadge declared (s:string), called on possibly-undefined → FAIL.)'
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'CMD-04/SD-3: escapeBadge crashes TypeError when decision field missing (recurring)'
+  - dimension: operational-deviation
+    statement: hourlyHeatmap carries per-signal flags so cells can be coloured by the declared primarySignal/failure-mode rate, not latency-defaulted; the aggregator computes per-signal concentration by hour.
+    checkMethod: deterministic-script
+    passCondition: RenderInput.hourlyHeatmap cells carry a per-signal field keyed to primarySignal; not avgLatency-only.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'UI-2/master-audit L09: cells colour by avgLatency only, no per-signal field; can''t see primary-signal concentration (recurring)'
+  - dimension: data-correctness
+    statement: awarenessSample coverage detail uses the impact-weighted SAMPLE denominator (≈sampled candidates), not population total (e.g. not 6÷1946→0%).
+    checkMethod: deterministic-script
+    passCondition: scanFunnel.llm.detail denominator == sampled candidate set; nonzero when findings exist.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'master-audit L08: detail=6÷1946≈0% shown despite 7 findings; denominator should be sampled traces not population (recurring)'
+  - dimension: operation-correctness
+    statement: selectionRules + signalSelectionTrace are actually produced and threaded into runMeta (enricher derives them); the signal-selection methodology surface renders non-empty on real runs.
+    checkMethod: deterministic-script
+    passCondition: runMeta.selectionRules + signalSelectionTrace non-empty; render of R2.4 cards is non-blank.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: 'master-audit L01: fields declared but no producer; render empty on every real run (recurring)'
+  - dimension: operation-correctness
+    statement: Fail-loud fires ONCE listing ALL gaps when ≥3 of 4 render shapes are missing (not a reactive one-at-a-time patch path).
+    checkMethod: gate
+    passCondition: Starved input → single fail-loud enumerating all missing shapes; partial-shape input proceeds.
+    severity: MED
+    existingCoverage: partial
+    evidenceSource: intendedBehavior R1 §9.3 fail-loud; reactive-improvisation class
+- componentId: orchestrator-step-8.9
+  componentName: Step 8.9 - Pre-Render Completeness Gate
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: data-correctness
+    statement: 'Completeness gate validates the EXACT RenderInput contract the renderer dereferences: sessionId type/presence, awarenessSample.traces array-shape, finding.actionable string-type, failureOrigin.{evidence,confidence} presence — and fails-loud listing ALL gaps in one pass.'
+    checkMethod: deterministic-script
+    passCondition: Malformed input (missing sessionId, failureOrigin:{}, actionable non-string) → single failure listing all three. (Gate currently checks RunMeta+section presence only → partial.)
+    severity: CRIT
+    existingCoverage: partial
+    evidenceSource: 'CMD-05/SD-6: verified completeness-check.ts:82 validates only RunMeta+sections; render crashes 3× in data-dependent order (recurring)'
+  - dimension: operation-correctness
+    statement: On a fresh run the wave6-checklist verifies every mandatory stamp emitted (parse-brief, awareness-sample, blind-spots, library-match, caps-result, deep-read-gate, awareness-witness); client reports HARD-FAIL on missing, internal reports warn-only.
+    checkMethod: gate
+    passCondition: 'wave6-checklist.ts: client+missing-stamp → exit 1; W11-05 fresh+awarenessRan=false+no-exemption → HARD-FAIL.'
+    severity: HIGH
+    existingCoverage: covered
+    evidenceSource: intendedBehavior PRD-SO-06/W9-08; existing wave6-checklist validator
+  - dimension: operational-deviation
+    statement: 'The gate does NOT false-pass on a stale artifact from a crashed prior run: per-run sentinels (runId-namespaced), not existence-only ''test -f'' checks.'
+    checkMethod: deterministic-script
+    passCondition: A stale prior-run artifact at the expected path does NOT satisfy the gate; sentinel matches current runId.
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'CMD-10/RC-ARTIFACT-NS: /tmp/* not runId-namespaced, Monitor gates fire on test -f → stale file passes, prior run''s findings rendered (recurring)'
+- componentId: orchestrator-step-8.9-js-syntax
+  componentName: Step 8.9 - Inline-JS Syntax Gate
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: Every executable inline <script> body in the rendered HTML parses via new Function (no execution); non-executable scripts (src=, ld+json, text/plain) are skipped; gate is non-bypassable for all report types.
+    checkMethod: deterministic-script
+    passCondition: render-js-syntax.ts exit 0 on clean HTML; exit 1 with scriptIndex+snippet on any SyntaxError (e.g. literal CR in split regex).
+    severity: CRIT
+    existingCoverage: covered
+    evidenceSource: intendedBehavior PR-050/W12-02; existing render-js-syntax gate + tests; closes the recurring UI-1 CR-byte regex SyntaxError
+- componentId: orchestrator-step-9
+  componentName: Step 9 - Render HTML Report
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: render.ts null-guards every dereferenced RenderInput field — sessionId (no .toUpperCase() on undefined), parsed.residual, decision fields — so a missing field fails-loud at the gate rather than crashing the renderer.
+    checkMethod: deterministic-script
+    passCondition: Render of input with missing sessionId/residual does not throw TypeError; either guarded fallback or gate-rejected upstream. (render.ts:632 input.sessionId.toUpperCase() unguarded → FAIL.)
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'CMD-03: verified render.ts:632 sessionId.toUpperCase() unguarded crash; ISSUE 6 escapeHtml/residual crash (recurring)'
+  - dimension: data-correctness
+    statement: copy-export split regex is emitted as valid JS literal split(/\r?\n/) — the template literal contains no raw CR byte (U+000D) — so the inline copy-decisions/live-preview script executes.
+    checkMethod: deterministic-script
+    passCondition: Rendered HTML contains split(/\r?\n/) with no embedded CR; render-js-syntax gate passes the copy-export block.
+    severity: CRIT
+    existingCoverage: covered
+    evidenceSource: 'UI-1/master-audit L07: literal CR byte → split(/<CR>?\n/) SyntaxError, entire inline block dead (recurring); now caught by render-js-syntax gate'
+  - dimension: data-correctness
+    statement: Renderer uses the template-stamp pattern (data→report.html.tpl), never procedural HTML; --audience client strips internal nodes (NODE-STRIP) so META/INTERNAL content never leaks into client reports.
+    checkMethod: deterministic-script
+    passCondition: Output derives from report.html.tpl; client render contains zero [INTERNAL]/META-audience nodes.
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: intendedBehavior PR-029 + FU-INT-1; feedback_no_private_org_in_public_docs analog
+  - dimension: data-correctness
+    statement: Remedy card renders full-width stacked layout (.remedy flex-direction:column with .remedy-body wrapper) and the canonical diff/plan fields are populated (before/after code + ActionablePlan present in the data contract).
+    checkMethod: trace-cross-ref
+    passCondition: Rendered .remedy uses flex-direction:column; remedy data includes diff + plan so canonical layout is not blank (Playwright/visual check vs canonical-remedy.png).
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: 'ISSUE 3a/3b: .remedy default-row crushed columns; handover contract lacks diff/plan fields → canonical renders blank (recurring)'
+- componentId: orchestrator-step-9.5
+  componentName: Step 9.5 - Auto-Open Rendered Report
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: After render the report is auto-opened OS-appropriately (Darwin open / Linux xdg-open / Windows start; headless prints file:// only when MUTAGENT_DIAG_HEADLESS=1); operator is never asked to click a file path.
+    checkMethod: trajectory-diff
+    passCondition: Transcript shows the OS-correct open invocation (or headless URL print) immediately after Step 9; no 'open this file' instruction to operator.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: intendedBehavior PR-014; feedback_diagnostics_auto_open_report
+- componentId: orchestrator-step-10
+  componentName: Step 10 - HITL Review Gate
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operational-deviation
+    statement: AskUserQuestion does NOT fire at Step 10; the orchestrator emits the ready signal and waits for the operator's markdown paste as the sole approval channel.
+    checkMethod: trajectory-diff
+    passCondition: Transcript shows ready-signal then wait-for-paste; no AskUserQuestion between render and copy-back receipt.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: intendedBehavior PR-014 (paste IS approval); feedback_picker_artifact_self_service
+- componentId: orchestrator-step-11.0
+  componentName: Step 11.0 - Report-Only Short-Circuit
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: When config.target.platform === 'report-only' the apply-confirmation gate is skipped, runMeta.applySkipped is logged, and the run HALTs after Step 10 — no apply dispatch, no source/config mutation.
+    checkMethod: deterministic-script
+    passCondition: report-only config → runMeta.applySkipped={reason} present, zero apply-worker dispatch, Methodology Decisions row surfaces it.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: intendedBehavior PRD-SO-04; feedback_report_only
+- componentId: orchestrator-step-11
+  componentName: Step 11 - Parse Copy-Back + Apply Gate
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: data-correctness
+    statement: Every approved remedyId parsed from the copy-back markdown is validated to exist in the findings JSON before the apply gate; unknown remedyIds are rejected, not applied.
+    checkMethod: deterministic-script
+    passCondition: persist-selections.ts validates each remedyId against findings; unknown id → reject + surface; approved set ⊆ findings remedy ids.
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: intendedBehavior Step 11 validation; persist-selections.ts
+  - dimension: operational-deviation
+    statement: A final destructive-action AskUserQuestion gate (Confirm / Dry-run / Cancel) fires before any BG apply dispatch; the orchestrator never self-authorizes apply from phrases like 'ship it'.
+    checkMethod: trajectory-diff
+    passCondition: Transcript shows the 3-option AskUserQuestion before Step 11 dispatch; explicit confirm required; no self-dispatch on ambiguous approval.
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: intendedBehavior destructive-action gate; feedback_mdiag_lead_never_applies
+- componentId: orchestrator-step-11-dispatch
+  componentName: Step 11 - Apply Dispatch
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: On confirm, diagnostics-apply-worker is dispatched with run_in_background:true + isolation:worktree and a prompt carrying approved_remedies + target_spec(from config.yaml) + diagnosed_at_hash; never run inline in the parent session.
+    checkMethod: trajectory-diff
+    passCondition: Agent() call uses subagent_type diagnostics-apply-worker, isolation worktree, BG; prompt includes diagnosed_at_hash + target_spec.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: intendedBehavior PR-004 BG isolation; feedback_lead_never_executes
+- componentId: orchestrator-step-12
+  componentName: Step 12 - Self-Diagnostics Check
+  componentType: skill-orchestrator-step
+  criteria:
+  - dimension: operation-correctness
+    statement: Self-diagnostics runs ONLY when config.self_diagnostics.enabled===true (clients ship false); it is on-demand maintainer-only, never auto-fired/cron-scheduled.
+    checkMethod: deterministic-script
+    passCondition: enabled=false → Step 12 skipped entirely; no cron/per-session/daily cadence wiring present.
+    severity: MED
+    existingCoverage: partial
+    evidenceSource: intendedBehavior PR-022; feedback_self_diagnostics_on_demand_only
+  - dimension: data-correctness
+    statement: Self-diag output carries [INTERNAL] banner + META audience and asserts isMetaReport ⇒ audience=internal (self-diag invariant); it never renders to a client-audience surface.
+    checkMethod: typebox-schema
+    passCondition: completeness-check asserts isMetaReport⇒audience=internal; self-diag findings tagged META; [INTERNAL] banner present.
+    severity: HIGH
+    existingCoverage: covered
+    evidenceSource: intendedBehavior PR-025; completeness-check isMetaReport invariant
+- componentId: agent-diagnostics-analyzer
+  componentName: Diagnostics Analyzer
+  componentType: agent
+  criteria:
+  - dimension: operation-correctness
+    statement: Every dispatched analyzer terminates and emits an evidence file at .mutagent-diagnostics/{run_id}/evidence/{slice_id}.md before Step 7 aggregate runs (no orphaned/timed-out worker silently dropped).
+    checkMethod: gate
+    passCondition: For each slice_id in the dispatch plan there exists a non-empty evidence file; pre-aggregate gate fails-loud listing any missing slice_id.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'Gaps: ''No deterministic validation that all N sub-agents dispatched at Step 6 actually returned before Step 7''; AGT-15 partial-emit on wall-clock cap'
+  - dimension: operation-correctness
+    statement: Analyzer runs CODE-FIRST tiered analysis (pattern→tree→structural→LLM) rather than jumping straight to LLM eyeballing; LLM-deviation tier only fires after deterministic tiers are exhausted.
+    checkMethod: trace-cross-ref
+    passCondition: Analyzer transcript shows tier0/structural artifacts consumed before any LLM read; llmReadCount in evidence matches distinct traceIds actually quoted.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: intendedBehavior CODE-FIRST tiered; AGT-08 orchestrator hand-read traces instead of using script output
+  - dimension: data-correctness
+    statement: Every emitted Finding carries all required fields (findingId, actionable as string, failureOrigin with non-empty evidence + confidence∈{high,medium,low}, whyChain, sourceTraceIds, referenceIds, audience, assumptions[]); every Remedy carries applyTarget, targetClass, rationale, whyWorks, applyInstructions≥1, exactly one of diff XOR diffStatus.
+    checkMethod: typebox-schema
+    passCondition: findings-contract.ts exit 0; Finding/Remedy TypeBox validation passes including failureOrigin sub-field presence and diff XOR diffStatus.
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: CMD-06/SD-4 validator only checks failureOrigin non-null (sub-fields unchecked); SKL-04/AGT-10 analyzers guessed types, 15 findings rejected
+  - dimension: data-correctness
+    statement: 'Analyzer output type-fidelity: actionable is a string (not coerced to boolean), assumption.status uses the declared enum (not invented ''hypothesis''); analyzer used a schema-validated output tool, not free-form guessing.'
+    checkMethod: typebox-schema
+    passCondition: All fields type-match the embedded Finding/Remedy/Assumption JSON-Schema on FIRST pass; zero RESEND directives emitted.
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: 'SKL-04/AGT-10: AssumptionSchema unexported, analyzers guessed actionable→boolean, status→''hypothesis'', 15 findings rejected first pass'
+  - dimension: operational-deviation
+    statement: 'Findings are grounded in the briefed scope: every finding''s entity/sourceTraceIds fall within the Step 3a scope-filter entity and the slice''s assigned traceIds (no scope-drift, no findings about out-of-scope traces).'
+    checkMethod: trace-cross-ref
+    passCondition: Each finding.sourceTraceIds ⊆ slice.traceIds AND resolves to the scope-filter entity; zero findings reference traces outside the dispatched slice.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'Gaps: ''No check that findings produced by an analyzer match the scope briefed at Step 0'''
+  - dimension: operational-deviation
+    statement: 'Analyzer respects its trace-budget/time cap deterministically: a partial-emit caused by cache-cold latency variance is flagged as determinism-degrading in runMeta, not silently truncated.'
+    checkMethod: trace-cross-ref
+    passCondition: runMeta records {tracesAnalyzed, capHit, partialEmit, cacheState}; partialEmit=true surfaces a variance warning rather than being dropped.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: AGT-15 240s wall-clock cap causes partial-emit cache-cold vs cache-warm; cache state unrecorded
+- componentId: agent-diagnostics-apply-worker
+  componentName: Diagnostics Apply Worker
+  componentType: agent
+  criteria:
+  - dimension: operation-correctness
+    statement: Apply-worker operates exclusively in an isolated worktree (.worktrees/mutagent-diagnostics-{ts}/) and never mutates the operator's checked-out branch (PR-004 branch hygiene).
+    checkMethod: deterministic-script
+    passCondition: git status on operator's checkout shows no apply-worker mutations; all diffs land on the worktree branch only.
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: intendedBehavior PR-004 branch hygiene; feedback_root_and_worktrees / feedback_protected_surfaces
+  - dimension: operation-correctness
+    statement: Before any local/remote write, apply-worker runs the stale-check (diagnosed_at_hash vs current base) and HALTs+offers re-diagnose on drift; remote writes follow read-before-write GET→dry-run→idempotent PUT.
+    checkMethod: deterministic-script
+    passCondition: stale-detector invoked with diagnosed_at_hash before first write; on mismatch apply aborts; remote path shows GET then PUT (idempotent).
+    severity: CRIT
+    existingCoverage: partial
+    evidenceSource: script-stale-detector PR-011; CMD-13 stale-check ran against HEAD not apply-time base
+  - dimension: data-correctness
+    statement: Audit artifacts are written to the {run_id}-contracted path (.mutagent-diagnostics/{run_id}/audit/{session}/) with a complete AuditRecord (audit.json + audit.md); the {run_id} contract is not dropped mid-workflow.
+    checkMethod: typebox-schema
+    passCondition: audit.json validates against AuditRecord schema and lives under the {run_id} path; audit.md present.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'CMD-13: audit path contract {run_id} dropped in workflow steps'
+  - dimension: operational-deviation
+    statement: Branch names are runId-unique (not date-granular) so same-day re-runs do not collide.
+    checkMethod: deterministic-script
+    passCondition: Branch name embeds runId; two same-day runs produce distinct branch names (regex assert on {run_id} segment).
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: CMD-13 branch names date-granular (mutagent/{type}-{agent}-{date}); same-day re-runs collide
+  - dimension: operational-deviation
+    statement: Apply-worker only applies remedies explicitly approved via copy-back; it never self-dispatches or applies un-approved remedy IDs.
+    checkMethod: deterministic-script
+    passCondition: Set of applied remedyIds ⊆ persisted approved-selections JSON; zero un-approved applies.
+    severity: CRIT
+    existingCoverage: partial
+    evidenceSource: feedback_mdiag_lead_never_applies; persist-selections.ts validation; feedback_report_only
+- componentId: star-command-diagnose
+  componentName: '*diagnose'
+  componentType: star-command
+  criteria:
+  - dimension: operational-deviation
+    statement: The full pipeline executes the protocol steps in declared dependency order (Step 0→1→...→8.9→9→9.5→10→11.0→11→12) with no out-of-order or skipped mandatory step; a synthetic end-to-end run is detectable as in-order.
+    checkMethod: trajectory-diff
+    passCondition: Step-sequence sentinels (per-run stamps) appear in the declared partial order; mandatory gates (3.7 normalize, 6-pregate, 7.1, 8.9, 8.9-js) all fired before their dependents.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'Gaps: ''No deterministic check that the orchestrator-protocol Step sequence executes in declared order'''
+  - dimension: operational-deviation
+    statement: A full end-to-end run (ingest→...→render) on a synthetic fixture produces a report satisfying the self-diagnosis-contract.yaml declared success_criteria (integration-level golden).
+    checkMethod: trajectory-diff
+    passCondition: E2E harness run → report scored against the 10-category contract = all-pass for the synthetic case.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'Gaps: ''No end-to-end acceptance test that a full run produces a report matching self-diagnosis-contract success_criteria'''
+  - dimension: operation-correctness
+    statement: Two back-to-back runs on byte-identical source (and a second machine) diff in ≤ the Phase-target number of scorecard dimensions after masking injected-timestamp+runId (variance score within target).
+    checkMethod: deterministic-script
+    passCondition: Variance score (count of differing scorecard dimensions) ≤ Phase target; runId/generated-at masked before diff.
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: Methodology scorecard + byte-identity masking contract; RC-LLM-PIN/RC-ENV dominant variance
+  - dimension: data-correctness
+    statement: runId is deterministic (content/config hash) OR explicitly excluded from byte-identity; all timestamps are injected (passed-in), so the byte-identity masking contract is satisfiable.
+    checkMethod: deterministic-script
+    passCondition: runId derived from content-hash (no unseeded Math.random); no wall-clock Date.now() in artifact bodies except injected --generated-at. (session.ts run-${Date.now()}-${shortHex} → FAIL.)
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'CMD-12/RC-ENV: runId=run-${Date.now()}-${shortHex(4)} unseeded Math.random; timestamps Date.now() (recurring)'
+  - dimension: operational-deviation
+    statement: configRoot is resolved once (walk-up to nearest .mutagent-diagnostics), passed as absolute --config-root to all scripts, and recorded in runMeta — cwd flips never change the awareness-fire-vs-skip decision across bash calls.
+    checkMethod: deterministic-script
+    passCondition: All scripts receive identical absolute --config-root; runMeta.configRoot recorded; Step 4.5 priors lookup invariant to cwd. (Defaults to process.cwd() → FAIL.)
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'AGT-16/RC-ENV: configRoot defaults to process.cwd(), env resets cwd between bash calls → methodology divergence (recurring)'
+  - dimension: data-correctness
+    statement: runMeta.decisions records genuine CHOICES between alternatives (each with the alternative considered + rationale), not mere observations; the Decisions tab lists the actual run choices (dispatch fan-out count, sampling strategy, override fired).
+    checkMethod: deterministic-script
+    passCondition: Each decisions[] entry has {step, choice, rationale, alternativesConsidered}; non-choice/empty-rationale entries flagged.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: 'Gaps: ''No check that runMeta.decisions record DECISIONS vs observations'' + ''Decisions section lists CHOICES made'''
+- componentId: star-command-normalize-traces
+  componentName: '*normalize-traces'
+  componentType: star-command
+  criteria:
+  - dimension: operation-correctness
+    statement: Binds to the platform-specific normalizer script and never hand-parses; produces both traces-metadata.json and entity-context.json deterministically.
+    checkMethod: trajectory-diff
+    passCondition: Invocation calls scripts/normalize/platforms/{platform}.ts; both artifacts emitted; no inline parsing.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: intendedBehavior 'never hand-parse'; RC-INGEST hand-rolled jq fallback
+- componentId: star-command-library-match
+  componentName: '*library-match'
+  componentType: star-command
+  criteria:
+  - dimension: operation-correctness
+    statement: Binds to scripts/library/match.ts; empty library valid; double-zero HARD-REFUSES; never fabricates priors.
+    checkMethod: deterministic-script
+    passCondition: Command output == match.ts output; double-zero refuse path honored.
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: intendedBehavior R2.3/W9-02; library tests
+- componentId: star-command-dispatch-analyzers
+  componentName: '*dispatch-analyzers'
+  componentType: star-command
+  criteria:
+  - dimension: operational-deviation
+    statement: Fans out ≤5 analyzers via filled handover_contract YAML and WAITS for all to complete before returning; the handover embeds the full schema+example (no field-names-only).
+    checkMethod: trajectory-diff
+    passCondition: ≤5 Agent() dispatches with complete handover YAML; aggregate not entered until all analyzers returned; handover contains embedded schema.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: intendedBehavior Step 6; SKL-04 field-names-only contract; gaps 'all N sub-agents returned before Step 7'
+- componentId: star-command-render-report
+  componentName: '*render-report'
+  componentType: star-command
+  criteria:
+  - dimension: operation-correctness
+    statement: Binds to scripts/report/render.ts to stamp the template (never hand-builds HTML); output passes render-js-syntax + completeness gates.
+    checkMethod: deterministic-script
+    passCondition: Rendered HTML derives from report.html.tpl; render-js-syntax exit 0; no procedural HTML construction in the trajectory.
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: intendedBehavior PR-029; existing render-js-syntax gate
+- componentId: star-command-self-diagnose
+  componentName: '*self-diagnose'
+  componentType: star-command
+  criteria:
+  - dimension: operational-deviation
+    statement: Routes the session transcript through the identical RCA engine as client diagnosis (PR-025), tags output [INTERNAL]+META, and only runs when self_diagnostics.enabled and explicitly invoked (on-demand maintainer-only).
+    checkMethod: trace-cross-ref
+    passCondition: Same analyzer/renderer entrypoints used; output [INTERNAL]-banner+META; gated on enabled flag + explicit invocation, no auto-fire.
+    severity: MED
+    existingCoverage: partial
+    evidenceSource: intendedBehavior PR-022/PR-025; feedback_self_diagnostics_on_demand_only; completeness isMetaReport invariant
+- componentId: script-tier0-scan
+  componentName: scripts/tier0-scan.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: Detects error spikes (consecutive isError), latency spikes (IQR-fence/p95), feedback clusters, token caps deterministically and emits a well-formed Tier0Report; pure, no LLM/clock/network.
+    checkMethod: deterministic-script
+    passCondition: Unit fixtures for each signal type produce the expected flags; identical input → identical Tier0Report.
+    severity: HIGH
+    existingCoverage: covered
+    evidenceSource: intendedBehavior PR-001; existing tier0-scan + tier0-scan-signals unit tests
+- componentId: script-slicer
+  componentName: scripts/slicer.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: Emits ≤5 slices with non-overlapping traceId partitions, cluster-based rationale when signal present and window fallback otherwise, deterministically.
+    checkMethod: deterministic-script
+    passCondition: slices≤5; union of traceIds == input set, pairwise disjoint; identical input → identical SlicePlan.
+    severity: MED
+    existingCoverage: partial
+    evidenceSource: intendedBehavior PR-017; pure Type A script
+- componentId: script-stale-detector
+  componentName: scripts/stale-detector.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: Compares diagnosed_at_hash against the apply-time BASE (origin/main), not HEAD; emits a stale verdict with drift description on mismatch.
+    checkMethod: deterministic-script
+    passCondition: stale==true when base advanced past diagnosed_at_hash; comparison target is base not HEAD.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'CMD-13/PR-011: stale-check against HEAD not base (recurring)'
+- componentId: script-config-schema
+  componentName: scripts/config/schema.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: Every config field the orchestrator/normalizer reads at runtime (e.g. source.latency_unit, caps, target.platform, self_diagnostics.enabled) is declared in schema.ts AND actually wired to a consumer (no declared-but-unread fields).
+    checkMethod: deterministic-script
+    passCondition: 'Static cross-ref: each schema field has ≥1 read site; latency_unit reaches the normalizer. (latency_unit currently declared-only → FAIL.)'
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'SKL-02: latency_unit declared in schema but never read by normalizer (recurring); schema-contract-gap class (unwired field)'
+- componentId: script-config-load
+  componentName: scripts/config/load.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: YAML parse resolves ${ENV_VAR} refs and merges .mutagentrc secrets into a typed Config; missing env refs surface a typed error rather than emitting an empty/partial config silently.
+    checkMethod: deterministic-script
+    passCondition: Unresolved ${VAR} → typed error; resolved Config matches schema; secrets never logged.
+    severity: MED
+    existingCoverage: partial
+    evidenceSource: intendedBehavior; config load/validate path
+- componentId: script-config-validate
+  componentName: scripts/config/validate.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: Validates loaded config against TypeBox schema and emits structured ValidationError[] on mismatch (exit non-zero), not a boolean-only verdict.
+    checkMethod: typebox-schema
+    passCondition: Malformed config → {ok:false, errors[]} with field paths; valid config → ok:true.
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: intendedBehavior; existing config validate unit coverage
+- componentId: script-setup-detect
+  componentName: scripts/setup/detect.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: Returns SetupState with correct {state, agentsBoundary, completion%} and route decision for present/partial/missing config × 4 boundary states.
+    checkMethod: deterministic-script
+    passCondition: Unit matrix over input states yields the declared SetupState + route; no crash on missing .mutagent-diagnostics dir.
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: intendedBehavior Step 1; existing setup/CLI tests
+- componentId: script-setup-ensure-cli
+  componentName: scripts/setup/ensure-cli.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: planCliEnsure is pure decision logic and NEVER installs; runCliInstall installs only after explicit user approval (AskUserQuestion on Claude Code, chat fallback elsewhere).
+    checkMethod: deterministic-script
+    passCondition: planCliEnsure has zero install side-effects; runCliInstall gated on approval flag; covered by ensure-cli/ensure-source-cli tests.
+    severity: HIGH
+    existingCoverage: covered
+    evidenceSource: intendedBehavior PR-021; existing ensure-cli + ensure-source-cli tests; feedback_protected_surfaces (no auto-install)
+- componentId: script-normalize-trace
+  componentName: scripts/normalize/trace.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: Canonical types are the single source of truth and ALL contract types the analyzers/enricher consume are EXPORTED (notably AssumptionSchema) so no downstream guessing.
+    checkMethod: deterministic-script
+    passCondition: AssumptionSchema + Finding/Remedy/Assumption schemas exported; static check that handover contract references the exported schema. (AssumptionSchema currently unexported → FAIL.)
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'SKL-04/AGT-10: AssumptionSchema defined in trace.ts but not exported → analyzers guess types (recurring)'
+- componentId: script-normalize-platforms-langfuse
+  componentName: scripts/normalize/platforms/langfuse.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: Single CLI call (--in --out-metadata --out-entity) produces both traces-metadata.json and entity-context.json via a streaming path; has import.meta.main entrypoint; no OOM on multi-GB input.
+    checkMethod: deterministic-script
+    passCondition: CLI emits both artifacts on a >2GB fixture without OOM; import.meta.main present. (Currently readFileSync+JSON.parse, export-only entity extractor → FAIL.)
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'RC-INGEST + OP-8: readFileSync OOM, no import.meta.main on entity extractor (both recurring)'
+  - dimension: data-correctness
+    statement: Latency normalization (span-check-before-short-circuit), entity majority-vote name, per-tool stats, and input-sample extraction are correct and deterministic.
+    checkMethod: deterministic-script
+    passCondition: 'langfuse.test.ts: 54s→54000ms case passes; entity name majority-vote stable; per-tool error-rate correct.'
+    severity: CRIT
+    existingCoverage: partial
+    evidenceSource: 'CMD-02: langfuse.ts:119 latency short-circuit before span guard (recurring); existing langfuse.test.ts present but does not cover the 54s case'
+- componentId: script-normalize-platforms-entity-context
+  componentName: scripts/normalize/platforms/entity-context.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: Shared extractors compute system-prompt content-hash, per-tool call-frequency+error-rate, input-sample, majority-vote name with NO LLM, and label systemPrompt 'absent' when missing; toolInventory excludes framework-noise spans.
+    checkMethod: deterministic-script
+    passCondition: Deterministic across runs; systemPrompt absent→labeled; agent.step.*/SDK/dup spans excluded from toolInventory.
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'ISSUE 2/5/6: inputSample raw JSON, systemPrompt unlabeled, 56 raw spans incl agent.step+SDK+dups (recurring)'
+- componentId: script-enrich-build-render-input
+  componentName: scripts/enrich/build-render-input.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: buildSignalCensus reconciles via PR-049 impact×prevalence with a failure-validity gate (drops observability-hygiene artifacts), producing exactly one runMeta.primarySignal{name,why,ruledOut[],confidence} — never frequency-ranked.
+    checkMethod: deterministic-script
+    passCondition: Census order is impact×severity; low-tagging-rate excluded; one primarySignal with ruledOut[]. (Line 223 sorts by matchCount → FAIL.)
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'ISSUE 1/DC-1: verified buildSignalCensus:223 matchCount sort; LF-002 surfaced primary (recurring)'
+  - dimension: operation-correctness
+    statement: 'Deterministic + idempotent: no LLM/network/Math.random/Date.now except injected --generated-at; bigStat percentiles (p50/p95/max) and 24-cell heatmap computed reproducibly.'
+    checkMethod: deterministic-script
+    passCondition: RenderInput MD5-identical across 2 runs after masking --generated-at; percentile math unit-verified.
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: intendedBehavior deterministic enricher; scorecard byte-identity
+  - dimension: operation-correctness
+    statement: escapeBadge and all field mappers undefined-guard their inputs; fail-loud fires ONCE enumerating all missing shapes when ≥3 of 4 render shapes absent.
+    checkMethod: deterministic-script
+    passCondition: escapeBadge(undefined) safe; missing-decision-field no throw; ≥3-missing → single enumerated fail-loud.
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: 'CMD-04/SD-3: escapeBadge TypeError on missing field (recurring); R1 §9.3 fail-loud'
+- componentId: script-report-render
+  componentName: scripts/report/render.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: All RenderInput dereferences are null-guarded (sessionId, residual, decision fields, entity sub-fields); render never throws TypeError on a contract-incomplete input — it fails at the gate, not the renderer.
+    checkMethod: deterministic-script
+    passCondition: Render of inputs with each optional field missing → no uncaught TypeError. (render.ts:632 .toUpperCase() unguarded → FAIL.)
+    severity: CRIT
+    existingCoverage: none
+    evidenceSource: CMD-03 render.ts:632 + ISSUE 6 escapeHtml/residual crashes (recurring)
+  - dimension: data-correctness
+    statement: Inline JS emitted into HTML is syntactically valid (no raw CR in split regex); template-inline-js lint rejects TS patterns in executable <script> blocks; --audience client strips all internal nodes.
+    checkMethod: deterministic-script
+    passCondition: render-js-syntax + template-inline-js lint pass; client render contains no [INTERNAL] nodes; split(/\r?\n/) literal valid.
+    severity: CRIT
+    existingCoverage: covered
+    evidenceSource: UI-1 CR-byte SyntaxError (recurring); existing render-js-syntax + template-inline-js gates
+- componentId: script-report-persist-selections
+  componentName: scripts/report/persist-selections.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: Parses copy-back markdown, extracts approved remedy IDs, validates each against findings, and emits selections JSON; rejects/flags any remedyId not present in findings.
+    checkMethod: deterministic-script
+    passCondition: Approved set ⊆ findings remedy ids; unknown id surfaced; selections JSON well-formed.
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: intendedBehavior Step 10/11 validation
+- componentId: script-contract-types
+  componentName: scripts/contract/types.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: SelfDiagnosisContract TypeBox schema enforces the 10-category shape and pass/fail/not-applicable/pending scoring; malformed contract fails-loud at parse.
+    checkMethod: typebox-schema
+    passCondition: Valid contract parses; malformed category/score → fail-loud; 10 categories enforced.
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: intendedBehavior Wave-4; existing self-diagnosis-contract schema
+- componentId: script-lint-template-inline-js
+  componentName: scripts/lint/template-inline-js.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: Walks assets/templates/*.html and rejects TypeScript patterns (string-typed templates, type annotations) inside executable <script> blocks (R-007-B), preventing TS leaking into final HTML.
+    checkMethod: deterministic-script
+    passCondition: Template with TS in a <script> block → lint exit 1 with file:line; clean template → exit 0.
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: intendedBehavior R-007-B; existing lint script
+- componentId: script-awareness-llm-sample
+  componentName: scripts/awareness/llm-sample.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: Trace selection for the 5-trace mini-sample is deterministic (no clock/random); discoveredSignals are emitted as the source-of-truth stamp; skips on confirmed library priors.
+    checkMethod: deterministic-script
+    passCondition: Identical traces → identical 5 selected; buildAwarenessSample stamp emitted; skip when prior confirmed.
+    severity: MED
+    existingCoverage: partial
+    evidenceSource: intendedBehavior R2.2; existing awareness tests (selection); AGT-08 (orchestrator must consume the stamp, not re-eyeball)
+- componentId: script-awareness-blind-spots
+  componentName: scripts/awareness/blind-spots.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: buildBlindSpots emits well-formed {signal, measurable, checkedBy, result} rows separating Tier-0-measurable from blind-spot signals; deterministic.
+    checkMethod: typebox-schema
+    passCondition: rows validate against BlindSpotRow; every awareness signal appears; identical input → identical rows.
+    severity: LOW
+    existingCoverage: covered
+    evidenceSource: intendedBehavior R2.2; existing awareness tests
+- componentId: script-library-match
+  componentName: scripts/library/match.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: Returns 3×-weighted libraryMatches; empty library returns empty list (valid); double-zero (priors===0 && llmReads===0) HARD-REFUSES as anti-laziness gate.
+    checkMethod: deterministic-script
+    passCondition: Empty library → [] + proceed; double-zero → refuse; weighting==3×. Covered by library tests.
+    severity: HIGH
+    existingCoverage: covered
+    evidenceSource: intendedBehavior R2.3/W9-02; existing library unit tests
+- componentId: script-library-store
+  componentName: scripts/library/store.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: Writes APPROVED-ONLY findings/remedies to the per-host gitignored library and records runs[].operatorInvocation verbatim (D2); never commits the library.
+    checkMethod: deterministic-script
+    passCondition: Store fires only post-apply on approved set; operatorInvocation stored verbatim; library path gitignored (git check-ignore passes).
+    severity: MED
+    existingCoverage: partial
+    evidenceSource: intendedBehavior R2.3/D2; library tests; feedback_skill_worktree_symlink_intentional (per-host)
+- componentId: script-invocation-parse-brief
+  componentName: scripts/invocation/parse-brief.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: Defensive parser never throws/drops on any input (incl. adversarial), determines scopeType + entity + focus colon-form with article-guard, and stores verbatim brief (D2).
+    checkMethod: deterministic-script
+    passCondition: Fuzz/adversarial inputs return a ParsedBrief; verbatim brief preserved; covered by parse-brief.test.ts.
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: intendedBehavior R2.6/W11-06; existing parse-brief tests
+- componentId: script-sample-deep-read-gate
+  componentName: scripts/sample/deep-read-gate.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: Gate derives llmReadCount from REAL evidence (distinct traceIds in evidence files), HARD-REFUSING on a declared-vs-actual mismatch; --focus does not exempt double-zero.
+    checkMethod: deterministic-script
+    passCondition: Declared 100 but 40 evidence traces → refuse; focus+zero-reads → refuse. (Currently trusts --llmReadCount arg → FAIL.)
+    severity: CRIT
+    existingCoverage: partial
+    evidenceSource: 'AGT-13: gate trusts arg, never counts evidence (recurring); existing gate covers double-zero presence but not attestation'
+- componentId: script-sample-representative
+  componentName: scripts/sample/representative.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: Worst-bucket representation meets the floor (>10% of sample) and coverageConfidence is honest per actual bucket distribution — an imbalanced 1/1/1/137 split cannot emit 98.96% 'high' confidence.
+    checkMethod: deterministic-script
+    passCondition: For n=140 the worst bucket ≥10% (worst-weighted floor); coverageConfidence downgrades when worst<floor. (1/1/1/137 → 0.71% high currently → FAIL.)
+    severity: HIGH
+    existingCoverage: partial
+    evidenceSource: 'CMD-07/SD-5: 1/1/1/137 sample, worst 0.71% but 98.96% high confidence (recurring)'
+  - dimension: operation-correctness
+    statement: 'Sampler is fully deterministic (no clock/random): identical population → byte-identical buckets + 4-dimensional coverage proof.'
+    checkMethod: deterministic-script
+    passCondition: Two runs → identical selected[] + coverageProof; documented in sampler header.
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: intendedBehavior R2.5 deterministic; sampler header attests no clock/random
+- componentId: script-sample-caps
+  componentName: scripts/sample/caps.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: A locked recommendDispatch(population,sliceCount,estimatedSlots)→{n,analyzerCount} formula EXISTS and is deterministic, so dispatch sizing never relies on the orchestrator recalling a prior run from memory.
+    checkMethod: deterministic-script
+    passCondition: recommendDispatch present and pure; identical input → identical (n,analyzerCount). (No such formula currently → FAIL.)
+    severity: HIGH
+    existingCoverage: none
+    evidenceSource: 'SKL-05/AGT-04: no locked formula → memory-based n=140/4-analyzers recall (recurring); scorecard (n,analyzerCount) dimension'
+  - dimension: operational-deviation
+    statement: enforceCaps respects active/inactive per cap (cost INACTIVE by default) with an injected clock; CapsResult reproducible.
+    checkMethod: deterministic-script
+    passCondition: Inactive cost cap never trips; identical injected clock → identical CapsResult; covered by caps tests.
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: intendedBehavior D1; caps with injected clock
+- componentId: script-validate-findings-contract
+  componentName: scripts/validate/findings-contract.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: 'Validates the FULL contract the renderer dereferences: failureOrigin.evidence non-empty + confidence∈{high,medium,low}, diff XOR diffStatus, all required finding/remedy fields — failureOrigin:{} is rejected.'
+    checkMethod: typebox-schema
+    passCondition: failureOrigin:{} → exit 1; missing-confidence → exit 1; valid set → exit 0. (Currently checks failureOrigin non-null only → partial.)
+    severity: CRIT
+    existingCoverage: partial
+    evidenceSource: 'CMD-06/SD-4: validator only checks failureOrigin non-null, sub-fields crash renderer (recurring); existing validator covers presence + diff XOR'
+- componentId: script-validate-completeness-check
+  componentName: scripts/validate/completeness-check.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: Validates the exact RenderInput dereference surface (sessionId type, awarenessSample.traces array-shape, finding.actionable string, failureOrigin sub-fields) AND asserts isMetaReport⇒audience=internal, failing-loud with ALL gaps at once.
+    checkMethod: deterministic-script
+    passCondition: Malformed input → single failure enumerating sessionId+actionable+failureOrigin gaps. (Currently RunMeta+section presence only → partial.)
+    severity: CRIT
+    existingCoverage: partial
+    evidenceSource: 'CMD-05/SD-6: verified completeness-check.ts:82 RunMeta+section only; render crashes 3× (recurring)'
+- componentId: script-validate-wave6-checklist
+  componentName: scripts/validate/wave6-checklist.ts
+  componentType: script
+  criteria:
+  - dimension: operational-deviation
+    statement: Verifies every mandatory Wave-6 stamp present + well-formed; W11-05 HARD-FAILs (regardless of report type) on fresh+awarenessRan=false+no-exemption; client reports hard-fail on any missing stamp, internal warn-only.
+    checkMethod: gate
+    passCondition: Missing stamp on client report → exit 1; W11-05 condition → HARD-FAIL; covered by wave6-checklist tests.
+    severity: HIGH
+    existingCoverage: covered
+    evidenceSource: intendedBehavior W9-08/W11-05; existing wave6-checklist + tests
+  - dimension: operational-deviation
+    statement: Each stamp's declared methodology matches what the code executed (e.g. awareness-witness carries the exemptionReason that deep-read-gate set; library-match stamp reflects actual prior count).
+    checkMethod: trace-cross-ref
+    passCondition: Stamp fields cross-reference the producing script's output (exemptionReason origin matches deep-read-gate; isFreshRun matches library result).
+    severity: MED
+    existingCoverage: none
+    evidenceSource: 'Gaps: ''No check that wave-6 stamps actually declare the methodology the code executed'''
+- componentId: script-validate-render-js-syntax
+  componentName: scripts/validate/render-js-syntax.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: Parses every executable inline <script> via new Function (no execution), skips non-executable (src=, ld+json, text/plain, empty), and exits 1 with scriptIndex+snippet on any SyntaxError; non-bypassable.
+    checkMethod: deterministic-script
+    passCondition: CR-byte split-regex HTML → exit 1 with index/snippet; clean HTML → exit 0; covered by render-js-syntax tests.
+    severity: CRIT
+    existingCoverage: covered
+    evidenceSource: intendedBehavior PR-050; existing render-js-syntax gate + tests
+- componentId: script-cli-init
+  componentName: scripts/cli/init.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: init runs onboarding phases, installs agents non-blocking (Phase 5b), copies shared templates, and gates source-CLI install behind explicit approval; detects runtime correctly.
+    checkMethod: deterministic-script
+    passCondition: Config created at .mutagent-diagnostics/config.yaml; agents installed to .claude/skills; ensureSourceCli requires approval; covered by init-scope/install-agents tests.
+    severity: MED
+    existingCoverage: covered
+    evidenceSource: intendedBehavior; existing CLI routing unit tests
+- componentId: script-cli-doctor
+  componentName: scripts/cli/doctor.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: Emits a DoctorReport JSON {runtime, env(LANGFUSE_*,GOOGLE_API_KEY,...), version, errors[], recommendations[]} reflecting actual environment; never prints secret VALUES, only presence.
+    checkMethod: deterministic-script
+    passCondition: Report shape valid; env entries report present/absent not raw secret; missing key → error+recommendation.
+    severity: LOW
+    existingCoverage: partial
+    evidenceSource: intendedBehavior doctor; feedback_worktree_secret_safety (no secret leakage)
+- componentId: script-cli-run
+  componentName: scripts/cli/run.sh
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: Runtime selector falls through bun→pnpm-tsx→npx-tsx→node with zero Bun.* API dependence (fully portable); dispatches .ts via TS runtime and .sh via bash.
+    checkMethod: deterministic-script
+    passCondition: On a bun-absent host the fallback chain still executes scripts; grep confirms no Bun.* API in scripts/.
+    severity: MED
+    existingCoverage: partial
+    evidenceSource: intendedBehavior portable dispatch (zero Bun.* in scripts/)
+- componentId: script-self-diagnostics-probe
+  componentName: scripts/self-diagnostics/probe.ts
+  componentType: script
+  criteria:
+  - dimension: data-correctness
+    statement: Correctly detects host (claude-code/codex/other) and the session-transcript path (~/.claude/projects or ~/.codex/sessions); returns isAvailable=false rather than a wrong path when none found.
+    checkMethod: deterministic-script
+    passCondition: Per-host fixtures resolve the correct sessionPath; absent transcript → isAvailable:false, no fabricated path.
+    severity: LOW
+    existingCoverage: none
+    evidenceSource: intendedBehavior Step 12 probe
+- componentId: script-self-diagnostics-dispatch
+  componentName: scripts/self-diagnostics/dispatch.ts
+  componentType: script
+  criteria:
+  - dimension: operation-correctness
+    statement: Writes a descriptor that feeds the session transcript through the SAME RCA pipeline (Step 8+) using the identical analyzer+renderer (one engine, two subjects PR-025); only the subject differs.
+    checkMethod: trace-cross-ref
+    passCondition: Descriptor points at the same analyzer/renderer entrypoints as client diagnosis; output carries [INTERNAL]+META.
+    severity: MED
+    existingCoverage: none
+    evidenceSource: intendedBehavior PR-025

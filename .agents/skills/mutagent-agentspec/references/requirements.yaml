@@ -1,0 +1,295 @@
+# Requirements registry — mutagent-agentspec
+#
+# Machine-readable requirements hub. Ships with the skill (a sibling of principles.md).
+# Requirements are the HUB:
+#   OUTBOUND  — `features` (the wave work that implements the REQ; empty ⇒ UNMET),
+#               `evalCriteria` (what audits it; empty ⇒ UN-AUDITED — an honest gap),
+#               `principles` (the design rule it honors — PR-NNN in references/principles.md).
+#   INBOUND   — `feedbackSources` (the operator design note that motivated it).
+#
+# Source-of-truth chain: this file (HUB) → principles.md GOVERNS → the in-repo PRD is the
+# narrative. NDA: no client identity, synthetic only.
+
+meta:
+  subject: mutagent-agentspec
+  version: "0.1.0-alpha.0"
+  description: >
+    Product requirements for the ADL ① SPEC skill — the guided requirements interview that
+    emits a portable, validated agentspec.yaml. Derived from the operator design session, the
+    SKILL.md surface, principles.md (PR-001..PR-019), and the agentspec.v0.2.0 contract.
+  path: mutagent-system/mutagent-agentspec/.claude/skills/mutagent-agentspec/references/requirements.yaml
+  generatedFrom:
+    - "mutagent-system/.memory/features/mutagent-agentspec/PRD.md (the in-repo design source of truth)"
+    - "references/principles.md (PR-001..PR-019)"
+    - "references/workflows/orchestrator-protocol.md (the *spec interview FSM)"
+    - "scripts/contract/agentspec.schema.ts (the agentspec.v0.2.0 contract)"
+  feedbackSources:
+    - "operator design session 2026-06 — mutagent-agentspec plan (PRD.md)"
+
+requirements:
+  # ───────────────────────── DEFINITION — persona + prompt ─────────────────────────
+  - id: REQ-001
+    title: Capture persona (role + verbose persona) and the actual system prompt as first-class fields
+    status: done
+    priority: P0
+    features: [wave-1]
+    evalCriteria: ["schema:definition.persona required", "schema:definition.system_prompt required-string", "template: real multi-paragraph system_prompt validates"]
+    principles: [PR-014, PR-015]
+    feedbackSources: ["PRD §B: persona + system_prompt are primary operative text, not a summary"]
+
+  - id: REQ-002
+    title: Capture jobs-to-be-done with verbose what+why and expected output
+    status: done
+    priority: P0
+    features: [wave-1]
+    evalCriteria: ["schema:definition.jobs_to_be_done[] {id,description,expected_output}"]
+    principles: [PR-015]
+    feedbackSources: ["PRD §B: jobs_to_be_done = the 'Requirements' (CrewAI-task-aligned)"]
+
+  # ───────────────────────── DEFINITION — context + tools ─────────────────────────
+  - id: REQ-003
+    title: Capture context sources (kind + where_from + verbose description + optional auth_ref)
+    status: done
+    priority: P0
+    features: [wave-1]
+    evalCriteria: ["schema:definition.context_sources[] kind∈{api,saas,internal-service,mcp,cli}"]
+    principles: [PR-015]
+    feedbackSources: ["PRD §B: context_sources = what context + where it comes from"]
+
+  - id: REQ-004
+    title: Capture tools across four buckets (integration / code / skills / subagents), each with a verbose description
+    status: done
+    priority: P0
+    features: [wave-1]
+    evalCriteria: ["schema:definition.tools.{integration,code,skills,subagents}", "schema:every tool entry carries a description"]
+    principles: [PR-004, PR-015]
+    feedbackSources: ["PRD §B: tools nested formal fields, ALWAYS a verbose description; MCP-first binding"]
+
+  # ───────────────────────── DEFINITION — type / triggers / modeling / sop / evals ─────────
+  - id: REQ-005
+    title: Capture agent_type (conversational / automation / orchestrator)
+    status: done
+    priority: P1
+    features: [wave-1]
+    evalCriteria: ["schema:definition.agent_type closed enum"]
+    principles: [PR-013]
+    feedbackSources: ["PRD §B: agent_type is a first-class definition field"]
+
+  - id: REQ-006
+    title: Capture activation triggers (a2a/webhook/schedule/queue/event/mcp/manual) as a first-class field distinct from *monitor
+    status: done
+    priority: P0
+    features: [wave-1]
+    evalCriteria: ["schema:definition.triggers[] kind enum", "principles: PR-017 *monitor distinction documented"]
+    principles: [PR-017]
+    feedbackSources: ["PRD §H CP9: the designed agent's inbound activation events live in definition.triggers, NOT *monitor"]
+
+  - id: REQ-007
+    title: Capture modeling (LangGraph-aligned decision_graph + workflows)
+    status: done
+    priority: P1
+    features: [wave-1]
+    evalCriteria: ["schema:definition.modeling.decision_graph {state,nodes,edges}"]
+    principles: [PR-013]
+    feedbackSources: ["PRD §B: modeling.decision_graph LangGraph-aligned"]
+
+  - id: REQ-008
+    title: Capture a standardized SOP block (when + context + procedure + optional on_outcome)
+    status: done
+    priority: P0
+    features: [wave-1]
+    evalCriteria: ["schema:definition.sop[] {when,context,procedure}"]
+    principles: [PR-016]
+    feedbackSources: ["PRD §F principles added: standardized SOP block (condition + context + procedure)"]
+
+  - id: REQ-009
+    title: Capture binary-actionable, append-extensible eval success_criteria
+    status: done
+    priority: P0
+    features: [wave-1]
+    evalCriteria: ["schema:definition.evals.success_criteria[] {id,criterion,type,goal}", "criteria modeled as growable array"]
+    principles: [PR-019]
+    feedbackSources: ["PRD §H.3: eval criteria FLEX/grow across loop iterations"]
+
+  # ───────────────────────── BUILD ─────────────────────────
+  - id: REQ-010
+    title: Capture build target_framework (incl. harness:*) and target_eval_framework as guided choices inside the spec
+    status: done
+    priority: P0
+    features: [wave-1]
+    evalCriteria: ["schema:build.target_framework String accepts harness:* + future frameworks", "schema:build.target_eval_framework"]
+    principles: [PR-005, PR-001]
+    feedbackSources: ["PRD §B: build.target may be a HARNESS; lives inside the spec → cascade-update"]
+
+  # ───────────────────────── META / IDENTITY / LOOP ─────────────────────────
+  - id: REQ-011
+    title: Carry meta.spec_id identity anchor + meta.loop_state inside the spec; backwards-only linking
+    status: done
+    priority: P0
+    features: [wave-1]
+    evalCriteria: ["schema:meta.spec_id + meta.loop_state.stage", "schema:NO downstream links (closed object rejects a links field)"]
+    principles: [PR-010, PR-012, PR-013]
+    feedbackSources: ["PRD §H.2/H.4: loop-state-in-spec; 1-spec↔N-subjects; backwards-only linking"]
+
+  # ───────────────────────── APPENDIX / DOC-PINNING ─────────────────────────
+  - id: REQ-012
+    title: Pin framework doc roots in the appendix; *build crawls them fresh (never vendor doc bodies)
+    status: done
+    priority: P1
+    features: [wave-1]
+    evalCriteria: ["schema:appendix.framework_docs Record<string,string[]>", "references/frameworks/doc-pins.md present"]
+    principles: [PR-002]
+    feedbackSources: ["PRD §B appendix: PIN doc roots; crawl fresh at build (SDKs churn)"]
+
+  # ───────────────────────── VALIDATION GATE ─────────────────────────
+  - id: REQ-013
+    title: TypeBox round-trip schema gate — *validate-spec validates a spec file; the worked template asserts valid
+    status: done
+    priority: P0
+    features: [wave-1]
+    evalCriteria: ["scripts/validate/validate-spec.ts pure fn + CLI", "test: template agentspec.yaml.tpl validates", "test: closed-object rejects an undeclared field"]
+    principles: [PR-001, PR-013]
+    feedbackSources: ["PRD §G: the interview yields a schema-valid spec; round-trip validation"]
+
+  # ───────────────────────── INTERVIEW (the *spec FSM) ─────────────────────────
+  - id: REQ-014
+    title: The *spec interview runs on the parent session (AskUserQuestion / chat fallback) — no coordinator sub-agent
+    status: done
+    priority: P0
+    features: [wave-1]
+    evalCriteria: ["references/workflows/orchestrator-protocol.md FSM walks all definition+build areas", "SKILL.md §0: parent session is orchestrator"]
+    principles: [PR-006, PR-007]
+    feedbackSources: ["PRD §C: *spec full, parent-session-driven; AskUserQuestion can't run in a sub-agent"]
+
+  # ───────────────────────── BUILD / EVAL (OUTLINED) ─────────────────────────
+  - id: REQ-015
+    title: Ship two standalone *build sub-agent contracts (ai-engineer Actor + architect Verifier) with zero host-agent dependency
+    status: done
+    priority: P0
+    features: [wave-1]
+    evalCriteria: ["assets/agents/agentspec-ai-engineer.md present", "assets/agents/agentspec-architect.md present", "grep: zero host architect/developer/general-purpose/llm-whisperer refs"]
+    principles: [PR-008]
+    feedbackSources: ["PRD §D: ALL dispatched sub-agents are skill-shipped; NO host-agent dependency"]
+
+  - id: REQ-016
+    title: '*build (implement spec into target + TDD) is OUTLINED only this wave'
+    status: outlined
+    priority: P1
+    features: [wave-2]
+    evalCriteria: ["references/workflows/orchestrator-protocol.md#build outline present"]
+    principles: [PR-007, PR-002]
+    feedbackSources: ["PRD §E lean phasing: Wave-2 = *build (lightweight, careful)"]
+
+  - id: REQ-017
+    title: '*eval handoff to an evaluator is OUTLINED only (doc/protocol level, never a code import)'
+    status: outlined
+    priority: P2
+    features: [wave-3]
+    evalCriteria: ["references/workflows/orchestrator-protocol.md#eval-handoff outline present", "grep: evaluator mention is doc-level handoff, not import"]
+    principles: [PR-007, PR-018]
+    feedbackSources: ["PRD §C/§E: *eval outlined/phased handoff to mutagent-evaluator"]
+
+  # ───────────────────────── STANDALONE + SYMBIOSIS ─────────────────────────
+  - id: REQ-018
+    title: Standalone — zero source reference to any sibling skill (HARD ban on the internal skill-construction skill)
+    status: done
+    priority: P0
+    features: [wave-0, wave-1]
+    evalCriteria: ["sibling-skill registry-name grep over the skill tree returns empty", "no cross-skill code imports"]
+    principles: [PR-018]
+    feedbackSources: ["PRD §A: standalone + symbiosis (CORE); ignore the internal skill-construction skill"]
+
+  # ───────────────────────── HELIX ROUTING ─────────────────────────
+  - id: REQ-019
+    title: Register *spec in Helix routing additively (AdlStage.Spec + dispatch ROUTE + topology classification + routing.yaml + docs)
+    status: done
+    priority: P0
+    features: [wave-0]
+    evalCriteria: ["dispatch.ts *spec ROUTE resolves to mutagent-agentspec/adl_stage spec/interactive/ungated", "sync-index STAGE_BY_NAME mutagent-agentspec→spec", "orchestrator dispatch.test.ts *spec case green"]
+    principles: [PR-009]
+    feedbackSources: ["PRD §H CP2: add *spec + AdlStage.Spec to dispatch.ts/routing.yaml"]
+
+  # ───────────────────────── PACKAGE DISCIPLINE ─────────────────────────
+  - id: REQ-020
+    title: Self-host the skill's own PRD under .memory/features/; never ship it in the npm tarball
+    status: done
+    priority: P1
+    features: [wave-0, wave-1]
+    evalCriteria: [".memory/features/mutagent-agentspec/PRD.md present", "npm pack --dry-run excludes .memory/ + .meta/ + *.test.ts", ".meta/design-principles.md + requirements.yaml meta point at the PRD"]
+    principles: [PR-001, PR-018]
+    feedbackSources: ["operator condition 2026-06: the Spec module maintains its own Spec (self-hosted PRD, stripped at publish)"]
+
+  # ─────────────── DOGFOOD F1–F4 (lab-overseer run, 2026-06; schema 0.1.0→0.2.0) ───────────────
+  - id: REQ-021
+    title: Capture the SCENARIOS the agent must handle (situation + expected_behavior + edge_case flag)
+    status: done
+    priority: P0
+    features: [dogfood-fix]
+    evalCriteria: ["schema:definition.evals.scenarios[] {id,description,expected_behavior,category?,edge_case?} required", "interview D10 probes hard/adversarial cases", "worked template carries edge-case scenarios"]
+    principles: [PR-019, PR-015]
+    feedbackSources: ["dogfood F1 (lab-overseer): the emitted spec had 0 scenarios — the spec must carry the situations the agent handles"]
+
+  - id: REQ-022
+    title: Capture the GOLDEN eval-suite slices (dataset_categories with explicit edge_cases) the *eval dataset must cover
+    status: done
+    priority: P0
+    features: [dogfood-fix]
+    evalCriteria: ["schema:definition.evals.dataset_categories[] {id,description,edge_cases[]} required", "interview D11 captures slices + edge-cases", "seed-don't-duplicate handoff to evaluator (PR-018)"]
+    principles: [PR-019, PR-018]
+    feedbackSources: ["dogfood F2 (lab-overseer): no dataset definition — *eval had nothing to build a golden suite from"]
+
+  - id: REQ-023
+    title: Pin the implementation RUNTIME at spec-time so *build implements once (no pick-then-rebuild)
+    status: done
+    priority: P0
+    features: [dogfood-fix]
+    evalCriteria: ["schema:build.runtime required String (bun|node|deno|python|shell|…)", "interview B1 recommends runtime from target", "ai-engineer Step 2 builds for build.runtime ONLY", "architect pre-flight flags a runtime-rebuild as STEER"]
+    principles: [PR-001]
+    feedbackSources: ["dogfood F4 (lab-overseer): built in bash then rebuilt in Bun because the runtime was never pinned"]
+
+  - id: REQ-024
+    title: Apply provider best-practices (prompt-caching) at build, crawled FRESH from provider docs
+    status: done
+    priority: P1
+    features: [dogfood-fix]
+    evalCriteria: ["doc-pins.md pins provider caching roots (Anthropic/OpenAI/Google)", "ai-engineer Step 2.5 applies prompt-caching from crawled docs", "architect pre-flight verifies caching applied"]
+    principles: [PR-002]
+    feedbackSources: ["dogfood F3 (lab-overseer): build applied no prompt-caching / provider best-practices"]
+
+  # ─────────────── BUILD-FAITHFULNESS GATE (sim F-gap, 2026-06) ───────────────
+  - id: REQ-025
+    title: A build is green only when TDD passes AND a deterministic spec→impl coverage gate passes
+    status: done
+    priority: P0
+    features: [build-hardening]
+    evalCriteria: ["scripts/verify/spec-impl-coverage.ts: every definition.tools.code[].id needs an @implements module + a test", "ai-engineer Step 3.5 runs *coverage; termination requires coverage PASS", "architect pre-flight RE-RUNS the gate (scripted, not prose); a miss = STEER", "spec-impl-coverage.test.ts replays the collect-range miss → exit 1"]
+    principles: [PR-024]
+    feedbackSources: ["dogfood sim: scaffold shipped missing the collect-range tool with 27 green tests — a green TDD loop did not catch a dropped spec tool"]
+
+  - id: REQ-026
+    title: Spec-time backing signal — jobs_to_be_done[].backed_by names the code tools that implement each job
+    status: done
+    priority: P1
+    features: [build-hardening]
+    evalCriteria: ["schema:definition.jobs_to_be_done[].backed_by optional string[] (additive — no version bump)", "coverage gate flags a dangling backed_by ref (not a declared code tool)", "worked template demonstrates backed_by + the // @implements convention"]
+    principles: [PR-024]
+    feedbackSources: ["dogfood sim escalation E4: surface 'covered-as-spec but only NL-backed' jobs at spec time so BUILD knows its target surface"]
+
+  # ─────────────── SPEC-STAGE INTERVIEW UX (ADL ① SPEC dogfood, 2026-06) ───────────────
+  - id: REQ-027
+    title: 'BROWNFIELD — *spec-from-impl reverse-generates a draft agentspec from an existing implementation (subject-agnostic)'
+    status: done
+    priority: P1
+    features: [spec-stage]
+    evalCriteria: ["SKILL.md §0.1 carries a *spec-from-impl command row", "orchestrator-protocol.md has the #spec-from-impl section (read impl + env/integration surface → reverse-map onto definition → operator confirms inferred fields → emit + *validate-spec)", "grep: no per-connector / Slack / GitHub-app / subject-specific logic in the brownfield path"]
+    principles: [PR-001, PR-006, PR-014]
+    feedbackSources: ["dogfood F10 (ADL ① SPEC): support adopting OR reverse-generating an agentspec FROM an existing implementation when no spec exists — generic brownfield capability only"]
+
+  - id: REQ-028
+    title: 'Interview UX — infer→propose→confirm (F2), framework-before-tooling FSM order (F3), target-conditional tool binding (F5, revised PR-004), tooling matches the target language (F12)'
+    status: done
+    priority: P1
+    features: [spec-stage]
+    evalCriteria: ["orchestrator-protocol.md D0/D5 infer→propose→confirm with the chatbot→conversational / orchestrator→a2a-router / automation→one-shot map", "FSM asks B0 (target) before D3/D4", "PR-004 revised to target-conditional binding (CLI-first harness / MCP·Composio·SDK code-framework)", "D4 biases tooling to the target's language/ecosystem (e.g. TS/Mastra → Vercel AI SDK)"]
+    principles: [PR-004, PR-005, PR-015]
+    feedbackSources: ["dogfood F2/F3/F5/F12 (ADL ① SPEC): don't cold-ask the obvious; choose the framework before the tooling; bind tools per the chosen target + its language"]

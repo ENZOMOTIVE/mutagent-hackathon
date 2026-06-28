@@ -1,0 +1,47 @@
+[
+  {
+    "traceId": "trace-meta-001",
+    "sessionId": "session-meta-001",
+    "hasError": false,
+    "hasFeedback": true,
+    "rawScore": 1.5,
+    "latencyMs": 3200,
+    "sourcePlatform": "local-jsonl",
+    "skillBehaviorDeviationCount": 2,
+    "agentId": "diagnostics-orchestrator",
+    "startTime": "2026-05-28T10:00:00.000Z",
+    "endTime": "2026-05-28T10:00:03.200Z",
+    "totalTokens": 8420,
+    "tags": ["self-diagnostics", "phase-3-c"]
+  },
+  {
+    "traceId": "trace-meta-002",
+    "sessionId": "session-meta-001",
+    "hasError": false,
+    "hasFeedback": false,
+    "rawScore": 4,
+    "latencyMs": 1100,
+    "sourcePlatform": "local-jsonl",
+    "skillBehaviorDeviationCount": 0,
+    "agentId": "diagnostics-analyzer",
+    "startTime": "2026-05-28T10:00:03.500Z",
+    "endTime": "2026-05-28T10:00:04.600Z",
+    "totalTokens": 3210,
+    "tags": ["self-diagnostics"]
+  },
+  {
+    "traceId": "trace-meta-003",
+    "sessionId": "session-meta-002",
+    "hasError": true,
+    "hasFeedback": false,
+    "sourcePlatform": "local-jsonl",
+    "skillBehaviorDeviationCount": 1,
+    "agentId": "diagnostics-orchestrator",
+    "startTime": "2026-05-28T11:00:00.000Z",
+    "endTime": "2026-05-28T11:00:02.100Z",
+    "totalTokens": 5640,
+    "apiErrors": [
+      { "retryAttempt": 1, "maxRetries": 3, "timestamp": "2026-05-28T11:00:01.000Z" }
+    ]
+  }
+]

@@ -1,0 +1,49 @@
+# schemas/flow-profile.schema.yaml — EV-037 expected-flow profile (human-readable mirror)
+#
+# The agent-shaped expected-flow the context-flow audit (EV-028/029) + the
+# trajectory variance (EV-054) diff the ACTUAL flow-graph against. Carried on the
+# subject profile (`profile-subject.ts` → SubjectProfile.expectedFlow). Kept in
+# lockstep with the TypeBox `ExpectedFlow` in `scripts/contracts/flow-graph.ts`
+# (that file is the SINGLE SOURCE OF TRUTH).
+#
+# SUBJECT-AGNOSTIC: every name here is the subject's OWN tool/step/slot name,
+# supplied via auto-gen (EV-049: the modal observed threadings) or AUTHORED (the
+# canonical path for the semantic fields the trace alone can't carry). NO subject
+# vocabulary is baked into the engine.
+title: ExpectedFlow
+type: object
+additionalProperties: false
+required: [dispatchToolNames, edges, expectedUiSlots]
+properties:
+  dispatchToolNames:
+    type: array
+    items: { type: string, minLength: 1 }
+    description: >-
+      Which tool/step names are sub-agent DISPATCHES (EV-029). A flow-graph node
+      with one of these names produces a context HANDOFF rather than a plain tool
+      result. Auto-gen leaves this empty (TODO) — supply it AUTHORED.
+  edges:
+    type: array
+    description: >-
+      The producer→consumer threadings the subject SHOULD exhibit (a regression
+      baseline). Auto-gen (EV-049) seeds these from the modal observed
+      data-handoffs across the trace sample.
+    items:
+      type: object
+      additionalProperties: false
+      required: [fromTool, toTool]
+      properties:
+        fromTool: { type: string, minLength: 1, description: "Producer tool/step name." }
+        toTool: { type: string, minLength: 1, description: "Consumer tool/step name." }
+        slot:
+          type: string
+          minLength: 1
+          description: "Optional — when present, the diff also requires THIS slot to thread."
+  expectedUiSlots:
+    type: array
+    items: { type: string, minLength: 1 }
+    description: >-
+      Slots the subject's HTML artifact SHOULD render (EV-039/040, the operator's
+      HTML-artifact missing-data case): a value computed but absent from the HTML
+      is a missing-data leak. These aren't present in agent traces — supply them
+      AUTHORED (auto-gen leaves empty, TODO).

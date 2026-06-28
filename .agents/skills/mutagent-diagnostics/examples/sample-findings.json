@@ -1,0 +1,92 @@
+{
+  "sessionId": "sample-session-001",
+  "diagnosedAt": "2026-05-28T12:00:00.000Z",
+  "sourcePlatform": "local-jsonl",
+  "targetPlatform": "local-claude",
+  "totalTraces": 12,
+  "findings": [
+    {
+      "findingId": "F-001",
+      "actionable": "Tool call to 'search' returns empty results 60% of the time — agent retries in a loop without a fallback",
+      "assumptions": [
+        "Tool timeout is the primary cause of empty results (hypothesis-pending-source: search.ts timeout config not yet read)",
+        "No existing retry-cap exists in the tool definition"
+      ],
+      "failureOrigin": {
+        "what": "loop",
+        "why": "tool-missing",
+        "where": "tool-definition",
+        "evidence": "session-abc123 → message[14]: tool_result empty string, repeated 4×",
+        "confidence": "high"
+      },
+      "whyChain": [
+        {
+          "why": "Agent repeatedly calls search tool",
+          "evidence": "Trace messages 10-18: tool_use 'search' 4× in 90s",
+          "isOrigin": false
+        },
+        {
+          "why": "Search tool returns empty body on API timeout",
+          "evidence": "Tool result content: '' on 4/6 calls in session-abc123",
+          "isOrigin": false
+        },
+        {
+          "why": "No fallback path defined when search returns empty — agent loops",
+          "evidence": "tool-definition: search.ts missing timeout guard + empty-result branch",
+          "isOrigin": true
+        }
+      ],
+      "remedies": [
+        {
+          "remedyId": "R-001-a",
+          "title": "Add empty-result guard + max-retry cap to search tool definition",
+          "applyTarget": "scripts/tools/search.ts",
+          "failureOrigin": {
+            "what": "loop",
+            "why": "tool-missing",
+            "where": "tool-definition",
+            "evidence": "tool-definition: search.ts:42",
+            "confidence": "high"
+          },
+          "diff": {
+            "before": "if (!result) { return searchTool(query); }",
+            "after": "if (!result || retries >= MAX_RETRIES) { return { found: false, fallback: true }; }"
+          },
+          "cost": "low",
+          "correctness": "high",
+          "rank": 1,
+          "targetClass": "local-code-construct"
+        },
+        {
+          "remedyId": "R-001-b",
+          "title": "Add system-prompt instruction: 'If search returns empty after 2 attempts, summarize what you know and halt'",
+          "failureOrigin": {
+            "what": "loop",
+            "why": "prompt-underspec",
+            "where": "system-prompt",
+            "evidence": "system-prompt: no loop-break instruction present",
+            "confidence": "medium"
+          },
+          "cost": "low",
+          "correctness": "medium",
+          "rank": 2,
+          "targetClass": "local-agent"
+        }
+      ],
+      "sourceTraceIds": ["session-abc123"],
+      "referenceIds": {
+        "traceId": "session-abc123",
+        "sessionId": "session-abc123",
+        "findingId": "F-001"
+      }
+    }
+  ],
+  "discoveredChecks": [
+    {
+      "checkId": "DC-001",
+      "name": "Retry-loop detector",
+      "description": "Detects consecutive identical tool calls without intervening reasoning",
+      "affectedTraceIds": ["session-abc123"]
+    }
+  ]
+}

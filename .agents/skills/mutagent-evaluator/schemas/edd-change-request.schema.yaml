@@ -1,0 +1,114 @@
+# schemas/edd-change-request.schema.yaml
+# ============================================================================
+# F18 — EDD CLOSURE: the evaluator → ai-engineer change-request contract.
+#
+# The evaluator is JUDGE-ONLY (EV-051): it never fixes the subject. To close the
+# Eval-Driven-Development loop it REQUESTS the AI-Engineer (the *build ACTOR from
+# the SPEC stage) to amend the Agent / AgentSpec — wired over the `SendMessage`
+# tool both agents carry. This file is the HUMAN-readable shape; the executable
+# companion is scripts/edd/edd-types.ts (TypeBox) + scripts/edd/change-request.ts
+# (the validators + the bounded loop controller). Kept in lockstep.
+#
+#   evaluator  --(EddChangeRequest)-->  ai-engineer
+#   ai-engineer --(ChangeRequestResponse)--> evaluator
+#   evaluator  re-evaluates  →  loop until full green OR a bounded STOP.
+# ============================================================================
+$id: mutagent-evaluator/edd-change-request
+title: EDD Change-Request Contract (F18)
+
+definitions:
+  FailingCaseRef:
+    type: object
+    description: >
+      One failing/uncertain case the evaluator hands the engineer. GROUNDED —
+      carries the verbatim critique + ≥1 structured ref {obs,path,value}, the
+      SAME machine-checkable evidence the judge already emitted (GA-1). An
+      ungrounded ask (refs empty) is a DEFECT — the evaluator never asks for a
+      fix it cannot ground.
+    required: [caseId, criterionId, critique, refs]
+    additionalProperties: false
+    properties:
+      caseId: { type: string, minLength: 1 }
+      criterionId: { type: string, minLength: 1 }
+      critique: { type: string, minLength: 1, description: verbatim from the verdict }
+      refs:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          required: [obs, path, value]
+          additionalProperties: false
+          properties:
+            obs: { type: string, description: trace/observation id }
+            path: { type: string, description: field path within the observation }
+            value: { type: string, description: the EXACT cited string }
+
+  EddChangeRequest:
+    type: object
+    description: the evaluator → ai-engineer request (the SendMessage payload).
+    required: [requestId, swing, subject, remedyTarget, failingCases, proposedRemedy, status]
+    additionalProperties: false
+    properties:
+      requestId: { type: string, minLength: 1 }
+      swing:
+        type: integer
+        minimum: 1
+        description: 1-based EDD swing index (the Nth evaluator→engineer→re-eval cycle)
+      subject: { type: string, minLength: 1 }
+      remedyTarget:
+        enum: [agentspec, impl]
+        description: >
+          WHERE the engineer should fix — the evaluator PROPOSES, never patches.
+          agentspec = the DEFINITION (system_prompt / jobs / sop / criteria); the
+          def→impl cascade means the engineer re-runs *build after editing.
+          impl = the IMPLEMENTATION scaffold only (a wiring/faithfulness defect
+          that does NOT change the spec).
+      failingCases:
+        type: array
+        minItems: 1
+        items: { $ref: "#/definitions/FailingCaseRef" }
+      proposedRemedy:
+        type: string
+        minLength: 1
+        description: the proposed remedy in NL — a HYPOTHESIS for the engineer, not a mandate
+      status:
+        const: requested
+        description: the evaluator always emits `requested`
+
+  ChangeRequestResponse:
+    type: object
+    description: the ai-engineer → evaluator reply after consuming a request.
+    required: [requestId, status, note]
+    additionalProperties: false
+    properties:
+      requestId: { type: string, minLength: 1 }
+      status:
+        enum: [amended, rejected]
+        description: >
+          amended = the named target was edited (and, for an agentspec target,
+          *build was re-run to cascade def→impl) → a re-eval is warranted.
+          rejected = the engineer declined WITH a reason (wrong target / not
+          reproducible) → NO re-eval of an unchanged subject.
+      amendedTarget:
+        enum: [agentspec, impl]
+        description: which artifact was actually amended (echoes the request target)
+      rebuilt:
+        type: boolean
+        description: for an agentspec amend — was *build re-run to cascade def→impl?
+      note:
+        type: string
+        minLength: 1
+        description: human summary of the amendment OR the rejection reason (ALWAYS present)
+
+# ── Loop control (the afkloop-legal terminator — scripts/edd/change-request.ts) ─
+# The EDD loop is NEVER infinite. Termination gate, success-first:
+#   1. full-green            — varianceStable AND accuracyMet ⇒ DONE
+#   2. max-swings            — swing ≥ budget.maxSwings ⇒ STOPPED (+ convergence delta)
+#   3. max-wallclock         — elapsedMs ≥ budget.maxWallclockMs ⇒ STOPPED
+#   4. no-improvement-streak — N consecutive swings w/ no improvement ⇒ STOPPED
+# Defaults: maxSwings 6 · maxWallclockMs 30min · noImprovementStreakLimit 2.
+# F19 ordering is preserved in the CONTINUE branch: not-stable ⇒ variance phase,
+# stable ⇒ accuracy phase (variance precedes accuracy, always).
+loopControl:
+  phases: [build, variance, accuracy, done, stopped]
+  stopReasons: [full-green, max-swings, max-wallclock, no-improvement-streak]
