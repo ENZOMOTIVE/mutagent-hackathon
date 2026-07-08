@@ -73,27 +73,11 @@ specialized subagent; nothing auto-advances, and every apply is approval-gated.
 
 ```bash
 # 1 · clone
-git clone <this-repo> mutagent-hackathon && cd mutagent-hackathon
 
-# 2 · install the system  (agents + skills → .claude/ and .codex/)
-bunx @mutagent/helix init        # or: npx / pnpx
+## Project Tags
 
-# 3 · boot
-claude            # or codex
-> mutagent
-```
-
-`mutagent` boots **Helix** — the ADL dashboard, the system map, and the command roster:
-
-```
-🧬  MUTAGENT · ADL Orchestrator — Helix routes to your subagents
-  LIFECYCLE   ① SPEC → ② BUILD → ③ EVALUATE → ④ DIAGNOSE → ⑤ IMPROVE
-  SYSTEM      agentspec · skill-builder · evaluator · diagnostics
-  SETUP       ⚠ not onboarded yet — run *onboard
-  COMMANDS    *spec  *build  *evaluate  *diagnose  *onboard  *status
-```
-
----
+- `Agentic AI`
+- `Protocol`
 
 ## The Commands
 
