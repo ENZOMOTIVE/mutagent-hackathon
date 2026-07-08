@@ -143,12 +143,3 @@ Submissions are by **pull request** — the standard fork-and-PR flow:
 ## License
 
 Proprietary — © MutagenT. All rights reserved. Submission terms are defined by the hackathon rules; by opening a PR you agree to them.
-
-## Project Metadata
-
-| Field | Details |
-| --- | --- |
-| Repository | `ENZOMOTIVE/mutagent-hackathon` |
-| Categories | `Agentic AI`, `Protocol` |
-| Primary stack | TypeScript, JavaScript, HTML |
-
