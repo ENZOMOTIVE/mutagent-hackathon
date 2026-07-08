@@ -73,11 +73,27 @@ specialized subagent; nothing auto-advances, and every apply is approval-gated.
 
 ```bash
 # 1 · clone
+git clone <this-repo> mutagent-hackathon && cd mutagent-hackathon
 
-## Project Tags
+# 2 · install the system  (agents + skills → .claude/ and .codex/)
+bunx @mutagent/helix init        # or: npx / pnpx
 
-- `Agentic AI`
-- `Protocol`
+# 3 · boot
+claude            # or codex
+> mutagent
+```
+
+`mutagent` boots **Helix** — the ADL dashboard, the system map, and the command roster:
+
+```
+🧬  MUTAGENT · ADL Orchestrator — Helix routes to your subagents
+  LIFECYCLE   ① SPEC → ② BUILD → ③ EVALUATE → ④ DIAGNOSE → ⑤ IMPROVE
+  SYSTEM      agentspec · skill-builder · evaluator · diagnostics
+  SETUP       ⚠ not onboarded yet — run *onboard
+  COMMANDS    *spec  *build  *evaluate  *diagnose  *onboard  *status
+```
+
+---
 
 ## The Commands
 
@@ -127,3 +143,12 @@ Submissions are by **pull request** — the standard fork-and-PR flow:
 ## License
 
 Proprietary — © MutagenT. All rights reserved. Submission terms are defined by the hackathon rules; by opening a PR you agree to them.
+
+## Project Metadata
+
+| Field | Details |
+| --- | --- |
+| Repository | `ENZOMOTIVE/mutagent-hackathon` |
+| Categories | `Agentic AI`, `Protocol` |
+| Primary stack | TypeScript, JavaScript, HTML |
+
